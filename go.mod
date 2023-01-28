@@ -1,13 +1,15 @@
-module github.com/hashicorp/terraform-provider-scaffolding-framework
+module github.com/dcarbone/terraform-provider-opensearch
 
-go 1.18
+go 1.19
 
 require (
+	github.com/dcarbone/terraform-plugin-framework-utils/v3 v3.0.2
 	github.com/hashicorp/terraform-plugin-docs v0.13.0
 	github.com/hashicorp/terraform-plugin-framework v1.1.1
 	github.com/hashicorp/terraform-plugin-go v0.14.3
 	github.com/hashicorp/terraform-plugin-log v0.7.0
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.24.1
+	github.com/opensearch-project/opensearch-go v1.1.0
 )
 
 require (
