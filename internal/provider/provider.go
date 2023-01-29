@@ -16,20 +16,6 @@ import (
 	"github.com/opensearch-project/opensearch-go"
 )
 
-const (
-	configAttrAddresses            = "addresses"
-	configAttrUsername             = "username"
-	configAttrPassword             = "password"
-	configAttrCACert               = "ca_cert"
-	configAttrRetryOnStatuses      = "retry_on_statuses"
-	configAttrDisableRetry         = "disable_retry"
-	configAttrEnableRetryOnTimeout = "enable_retry_on_timeout"
-	configAttrMaxRetries           = "max_retries"
-	configAttrCompressRequestBody  = "compress_request_body"
-
-	configAttrInsecureSkipTLSVerify = "insecure_skip_tls_verify"
-)
-
 type OpenSearchProviderConfig struct {
 	Addresses types.List `tfsdk:"addresses"`
 
@@ -65,11 +51,9 @@ func (p *OpenSearchProvider) Schema(_ context.Context, _ provider.SchemaRequest,
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
 			configAttrAddresses: schema.ListAttribute{
-				Description: "List of master node addresses in your cluster",
-				Required:    true,
+				Description: "List of addresses to connect to",
 				ElementType: types.StringType,
 				Validators: []validator.List{
-					validation.Required(),
 					validation.IsURL(),
 				},
 			},
@@ -123,6 +107,8 @@ func (p *OpenSearchProvider) Configure(ctx context.Context, req provider.Configu
 		clientConfig opensearch.Config
 		client       *opensearch.Client
 
+		shared Shared
+
 		// create pooled transport
 		transport = cleanhttp.DefaultPooledTransport()
 	)
@@ -131,6 +117,13 @@ func (p *OpenSearchProvider) Configure(ctx context.Context, req provider.Configu
 	resp.Diagnostics.Append(req.Config.Get(ctx, &conf)...)
 	if resp.Diagnostics.HasError() {
 		return
+	}
+
+	// configure transport
+	if conf.InsecureSkipTLSVerify.IsNull() == false && conf.InsecureSkipTLSVerify.IsUnknown() == false && conv.BoolValueToBool(conf.InsecureSkipTLSVerify) == true {
+		transport.TLSClientConfig = &tls.Config{
+			InsecureSkipVerify: true,
+		}
 	}
 
 	// build base opensearch client config
@@ -150,26 +143,25 @@ func (p *OpenSearchProvider) Configure(ctx context.Context, req provider.Configu
 	if conf.CACert.IsNull() == false && conf.CACert.IsUnknown() == false {
 		clientConfig.CACert = []byte(conv.AttributeValueToString(conf.CACert))
 	}
-	// should
-	if conf.InsecureSkipTLSVerify.IsNull() == false && conf.InsecureSkipTLSVerify.IsUnknown() == false && conv.BoolValueToBool(conf.InsecureSkipTLSVerify) == true {
-		transport.TLSClientConfig = &tls.Config{
-			InsecureSkipVerify: true,
-		}
-		clientConfig.Transport = transport
-	}
 
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
+	shared = Shared{
+		Client: client,
+	}
+
 	// TODO: nope.
-	resp.ResourceData = client
-	resp.DataSourceData = client
+	resp.ResourceData = &shared
+	resp.DataSourceData = &shared
+
+	p.configured = true
 }
 
 func (p *OpenSearchProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
-		NewExampleResource,
+		NewResourceSecurityPluginUser,
 	}
 }
 
