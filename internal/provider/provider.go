@@ -159,8 +159,8 @@ func (p *OpenSearchProvider) Configure(ctx context.Context, req provider.Configu
 
 func (p *OpenSearchProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
-		NewSecurityPluginRoleResource,
-		NewSecurityPluginUserResource,
+		NewPluginSecurityRoleResource,
+		NewPluginSecurityUserResource,
 	}
 }
 

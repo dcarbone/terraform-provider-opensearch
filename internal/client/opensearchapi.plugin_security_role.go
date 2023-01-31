@@ -2,12 +2,81 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 
 	"github.com/opensearch-project/opensearch-go/opensearchapi"
 )
+
+func HandleResponseCleanup(r *opensearchapi.Response) {
+	if r != nil && r.Body != nil {
+		_ = r.Body.Close()
+	}
+}
+
+type PluginSecurityRole struct {
+	RoleName string `json:"-"`
+
+	ClusterPermissions []string `json:"cluster_permissions"`
+
+	IndexPermissions []struct {
+		IndexPatterns  []string `json:"index_patterns"`
+		DLS            string   `json:"dls"`
+		FLS            string   `json:"fls"`
+		MaskedFields   []string `json:"masked_fields"`
+		AllowedActions []string `json:"allowed_actions"`
+	} `json:"index_permissions"`
+
+	TenantPermissions []struct {
+		TenantPatterns []string `json:"tenant_patterns"`
+		AllowedActions []string `json:"allowed_actions"`
+	} `json:"tenant_permissions"`
+
+	// these are only populated on GET
+
+	Reserved *bool `json:"reserved,omitempty"`
+	Hidden   *bool `json:"hidden,omitempty"`
+	Static   *bool `json:"static,omitempty"`
+}
+
+type PluginSecurityRoleList struct {
+	openSearchAPIResponseError
+
+	Roles map[string]PluginSecurityRole `json:"-"`
+}
+
+func (r *PluginSecurityRoleList) UnmarshalJSON(b []byte) error {
+	m := make(map[string]json.RawMessage)
+	if err := json.Unmarshal(b, &m); err != nil {
+		return err
+	}
+
+	if v, ok := m["error"]; ok {
+		errs := openSearchAPIResponseError{}
+		if err := json.Unmarshal(v, &errs); err != nil {
+			return err
+		}
+		*r = PluginSecurityRoleList{
+			openSearchAPIResponseError: errs,
+		}
+		return nil
+	}
+
+	*r = PluginSecurityRoleList{
+		Roles: make(map[string]PluginSecurityRole),
+	}
+	for k, v := range m {
+		tmpRole := PluginSecurityRole{}
+		if err := json.Unmarshal(v, &tmpRole); err != nil {
+			return err
+		}
+		r.Roles[k] = tmpRole
+	}
+
+	return nil
+}
 
 type PluginSecurityRoleGetRequest struct {
 	Name string

@@ -15,16 +15,16 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-func NewSecurityPluginUserResource() resource.Resource {
-	r := new(SecurityPluginUserResource)
+func NewPluginSecurityUserResource() resource.Resource {
+	r := new(PluginSecurityUserResource)
 	return r
 }
 
-type SecurityPluginUserResource struct {
+type PluginSecurityUserResource struct {
 	ResourceShared
 }
 
-type SecurityPluginUserResourceData struct {
+type PluginSecurityUserResourceData struct {
 	Username   types.String `tfsdk:"username"`
 	Password   types.String `tfsdk:"password"`
 	Hash       types.String `tfsdk:"hash"`
@@ -40,11 +40,11 @@ type SecurityPluginUserResourceData struct {
 	BackendRoles            types.List `tfsdk:"backend_roles"`
 }
 
-func (r *SecurityPluginUserResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+func (r *PluginSecurityUserResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = makeResourceName(req.ProviderTypeName, resourceSuffixSecurityPluginUser)
 }
 
-func (r *SecurityPluginUserResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (r *PluginSecurityUserResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		// This description is used by the documentation generator and the language server.
 		Description: "OpenSearch Security Plugin User",
@@ -91,8 +91,8 @@ func (r *SecurityPluginUserResource) Schema(_ context.Context, _ resource.Schema
 	}
 }
 
-func (r *SecurityPluginUserResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var data *SecurityPluginUserResourceData
+func (r *PluginSecurityUserResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	var data *PluginSecurityUserResourceData
 
 	// Read Terraform plan data into the model
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
@@ -121,8 +121,8 @@ func (r *SecurityPluginUserResource) Create(ctx context.Context, req resource.Cr
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func (r *SecurityPluginUserResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var data *SecurityPluginUserResourceData
+func (r *PluginSecurityUserResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	var data *PluginSecurityUserResourceData
 
 	// Read Terraform prior state data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
@@ -143,8 +143,8 @@ func (r *SecurityPluginUserResource) Read(ctx context.Context, req resource.Read
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func (r *SecurityPluginUserResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data *SecurityPluginUserResourceData
+func (r *PluginSecurityUserResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var data *PluginSecurityUserResourceData
 
 	// Read Terraform plan data into the model
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
@@ -165,8 +165,8 @@ func (r *SecurityPluginUserResource) Update(ctx context.Context, req resource.Up
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func (r *SecurityPluginUserResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var data *SecurityPluginUserResourceData
+func (r *PluginSecurityUserResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var data *PluginSecurityUserResourceData
 
 	// Read Terraform prior state data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
@@ -184,6 +184,6 @@ func (r *SecurityPluginUserResource) Delete(ctx context.Context, req resource.De
 	// }
 }
 
-func (r *SecurityPluginUserResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+func (r *PluginSecurityUserResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
