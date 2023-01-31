@@ -3,6 +3,10 @@ package provider
 import "fmt"
 
 const (
+	providerName = "opensearch"
+)
+
+const (
 	configAttrAddresses            = "addresses"
 	configAttrUsername             = "username"
 	configAttrPassword             = "password"

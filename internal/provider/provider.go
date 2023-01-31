@@ -38,8 +38,6 @@ var _ provider.Provider = &OpenSearchProvider{}
 
 type OpenSearchProvider struct {
 	version string
-
-	configured bool
 }
 
 func (p *OpenSearchProvider) Metadata(_ context.Context, _ provider.MetadataRequest, resp *provider.MetadataResponse) {
@@ -144,24 +142,25 @@ func (p *OpenSearchProvider) Configure(ctx context.Context, req provider.Configu
 		clientConfig.CACert = []byte(conv.AttributeValueToString(conf.CACert))
 	}
 
+	// if there were any errors during config, bail out now
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
+	// create shared object for use in resource and datasource types
 	shared = Shared{
 		Client: client,
 	}
 
-	// TODO: nope.
+	// set shared
 	resp.ResourceData = &shared
 	resp.DataSourceData = &shared
-
-	p.configured = true
 }
 
 func (p *OpenSearchProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
-		NewResourceSecurityPluginUser,
+		NewSecurityPluginRoleResource,
+		NewSecurityPluginUserResource,
 	}
 }
 

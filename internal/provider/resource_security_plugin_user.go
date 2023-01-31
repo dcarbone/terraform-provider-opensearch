@@ -2,7 +2,7 @@ package provider
 
 import (
 	"context"
-	"fmt"
+
 	"github.com/dcarbone/terraform-plugin-framework-utils/v3/validation"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -15,13 +15,13 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-func NewResourceSecurityPluginUser() resource.Resource {
+func NewSecurityPluginUserResource() resource.Resource {
 	r := new(SecurityPluginUserResource)
 	return r
 }
 
 type SecurityPluginUserResource struct {
-	shd *Shared
+	ResourceShared
 }
 
 type SecurityPluginUserResourceData struct {
@@ -89,26 +89,6 @@ func (r *SecurityPluginUserResource) Schema(_ context.Context, _ resource.Schema
 			},
 		},
 	}
-}
-
-func (r *SecurityPluginUserResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	// Prevent panic if the provider has not been configured.
-	if req.ProviderData == nil {
-		return
-	}
-
-	shd, ok := req.ProviderData.(*Shared)
-
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *http.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
-		)
-
-		return
-	}
-
-	r.shd = shd
 }
 
 func (r *SecurityPluginUserResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {

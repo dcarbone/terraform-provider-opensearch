@@ -8,13 +8,13 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-func NewResourceSecurityPluginRole() resource.Resource {
+func NewSecurityPluginRoleResource() resource.Resource {
 	r := new(SecurityPluginRoleResource)
 	return r
 }
 
 type SecurityPluginRoleResource struct {
-	shd *Shared
+	ResourceShared
 }
 
 type SecurityPluginRoleResourceData struct {
@@ -97,13 +97,6 @@ func (r *SecurityPluginRoleResource) Schema(_ context.Context, req resource.Sche
 				Computed: true,
 			},
 		},
-	}
-}
-
-func (r *SecurityPluginRoleResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	// Prevent panic if the provider has not been configured.
-	if req.ProviderData == nil {
-		return
 	}
 }
 
