@@ -1,8 +1,6 @@
 package provider
 
 import (
-	"context"
-
 	"github.com/dcarbone/terraform-plugin-framework-utils/v3/conv"
 	"github.com/dcarbone/terraform-provider-opensearch/internal/client"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -24,9 +22,14 @@ var (
 		resourceAttrMaskedFields:   types.ListType{ElemType: types.StringType},
 		resourceAttrAllowedActions: types.ListType{ElemType: types.StringType},
 	}
+
+	tenantPermissionAttrTypeMap = attrTypeMap{
+		resourceAttrTenantPatterns: types.ListType{ElemType: types.StringType},
+		resourceAttrAllowedActions: types.ListType{ElemType: types.StringType},
+	}
 )
 
-func toNestedObjectList(attrTypes attrTypeMap, in []any, nullOnEmpty bool, fn nestedObjectFunc) (types.List, diag.Diagnostics) {
+func toNestedObjectList[T any](attrTypes attrTypeMap, in []T, nullOnEmpty bool, fn func(T) (types.Object, diag.Diagnostics)) (types.List, diag.Diagnostics) {
 	inLen := len(in)
 	objType := types.ObjectType{AttrTypes: attrTypes}
 
@@ -59,8 +62,20 @@ func indexPermissionToObject(p client.PluginSecurityRoleIndexPermission) (types.
 	)
 }
 
-func indexPermissionsToNestedList(ctx context.Context, r client.PluginSecurityRole) (types.List, diag.Diagnostics) {
-	inLen := len(r.IndexPermissions)
-	elems := make([]attr.Value, inLen)
+func indexPermissionsToNestedList(ip []client.PluginSecurityRoleIndexPermission, nullOnEmpty bool) (types.List, diag.Diagnostics) {
+	return toNestedObjectList(indexPermissionAttrTypeMap, ip, nullOnEmpty, indexPermissionToObject)
+}
 
+func tenantPermissionToObject(p client.PluginSecurityRoleTenantPermission) (types.Object, diag.Diagnostics) {
+	return types.ObjectValue(
+		tenantPermissionAttrTypeMap,
+		map[string]attr.Value{
+			resourceAttrTenantPatterns: conv.StringsToStringList(p.TenantPatterns, false),
+			resourceAttrAllowedActions: conv.StringsToStringList(p.AllowedActions, false),
+		},
+	)
+}
+
+func tenantPermissionsToNestedList(tp []client.PluginSecurityRoleTenantPermission, nullOnEmpty bool) (types.List, diag.Diagnostics) {
+	return toNestedObjectList(tenantPermissionAttrTypeMap, tp, nullOnEmpty, tenantPermissionToObject)
 }

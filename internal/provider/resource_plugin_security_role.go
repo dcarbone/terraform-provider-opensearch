@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"time"
 
 	"github.com/dcarbone/terraform-plugin-framework-utils/v3/conv"
@@ -35,19 +36,26 @@ type PluginSecurityRoleResourceData struct {
 	Static   types.Bool `tfsdk:"static"`
 }
 
-func (d *PluginSecurityRoleResourceData) UpdateFromRole(ctx context.Context, roleName string, r client.PluginSecurityRole) {
+func (d *PluginSecurityRoleResourceData) UpdateFromRole(roleName string, r client.PluginSecurityRole) diag.Diagnostics {
+	var diags diag.Diagnostics
+
 	d.RoleName = types.StringValue(roleName)
 	d.Description = types.StringValue(r.Description)
 	d.ClusterPermissions = conv.StringsToStringList(r.ClusterPermissions, true)
 
-	indexPerms := make(map[string])
-
-	d.IndexPermissions = types.List()
+	if d.IndexPermissions, diags = indexPermissionsToNestedList(r.IndexPermissions, false); diags.HasError() {
+		return diags
+	}
+	if d.TenantPermissions, diags = tenantPermissionsToNestedList(r.TenantPermissions, false); diags.HasError() {
+		return diags
+	}
 
 	// set "computed" values
 	d.Hidden = conv.BoolPtrToBoolValue(r.Hidden)
 	d.Static = conv.BoolPtrToBoolValue(r.Static)
 	d.Reserved = conv.BoolPtrToBoolValue(r.Reserved)
+
+	return diag.Diagnostics{}
 }
 
 func (r *PluginSecurityRoleResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -204,6 +212,10 @@ func (r *PluginSecurityRoleResource) Read(ctx context.Context, req resource.Read
 		)
 		return
 	}
+
+	diags := stateData.UpdateFromRole(roleName, osRole)
+	resp.Diagnostics.Append(diags.Warnings()...)
+	resp.Diagnostics.Append(diags.Errors()...)
 
 }
 
