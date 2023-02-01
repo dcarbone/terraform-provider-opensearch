@@ -17,32 +17,32 @@ func HandleResponseCleanup(r *opensearchapi.Response) {
 }
 
 type PluginSecurityRoleIndexPermission struct {
-	IndexPatterns  []string `json:"index_patterns"`
-	DLS            string   `json:"dls"`
-	FLS            string   `json:"fls"`
-	MaskedFields   []string `json:"masked_fields"`
-	AllowedActions []string `json:"allowed_actions"`
+	IndexPatterns  []string `json:"index_patterns" tfsdk:"index_patterns"`
+	DLS            string   `json:"dls" tfsdk:"dls"`
+	FLS            string   `json:"fls" tfsdk:"fls"`
+	MaskedFields   []string `json:"masked_fields" tfsdk:"masked_fields"`
+	AllowedActions []string `json:"allowed_actions" tfsdk:"allowed_actions"`
 }
 
 type PluginSecurityRoleTenantPermission struct {
-	TenantPatterns []string `json:"tenant_patterns"`
-	AllowedActions []string `json:"allowed_actions"`
+	TenantPatterns []string `json:"tenant_patterns" tfsdk:"tenant_patterns"`
+	AllowedActions []string `json:"allowed_actions" tfsdk:"allowed_actions"`
 }
 
 type PluginSecurityRole struct {
-	RoleName string `json:"-"`
+	RoleName string `json:"-" tfsdk:"-"`
 
-	Description string `json:"description"`
+	Description string `json:"description" tfsdk:"description"`
 
-	ClusterPermissions []string                             `json:"cluster_permissions"`
-	IndexPermissions   []PluginSecurityRoleIndexPermission  `json:"index_permissions"`
-	TenantPermissions  []PluginSecurityRoleTenantPermission `json:"tenant_permissions"`
+	ClusterPermissions []string                             `json:"cluster_permissions" tfsdk:"cluster_permissions"`
+	IndexPermissions   []PluginSecurityRoleIndexPermission  `json:"index_permissions" tfsdk:"index_permissions"`
+	TenantPermissions  []PluginSecurityRoleTenantPermission `json:"tenant_permissions" tfsdk:"tenant_permissions"`
 
 	// these are only populated on GET
 
-	Reserved *bool `json:"reserved,omitempty"`
-	Hidden   *bool `json:"hidden,omitempty"`
-	Static   *bool `json:"static,omitempty"`
+	Reserved *bool `json:"reserved,omitempty" tfsdk:"reserved"`
+	Hidden   *bool `json:"hidden,omitempty" tfsdk:"hidden"`
+	Static   *bool `json:"static,omitempty" tfsdk:"static"`
 }
 
 type PluginSecurityRoleList struct {

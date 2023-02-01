@@ -1,14 +1,16 @@
 package provider
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"net/http"
 	"time"
 
 	"github.com/dcarbone/terraform-plugin-framework-utils/v3/conv"
 	"github.com/dcarbone/terraform-provider-opensearch/internal/client"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -43,10 +45,10 @@ func (d *PluginSecurityRoleResourceData) UpdateFromRole(roleName string, r clien
 	d.Description = types.StringValue(r.Description)
 	d.ClusterPermissions = conv.StringsToStringList(r.ClusterPermissions, true)
 
-	if d.IndexPermissions, diags = indexPermissionsToNestedList(r.IndexPermissions, false); diags.HasError() {
+	if d.IndexPermissions, diags = indexPermissionsToTerraformNestedList(r.IndexPermissions, false); diags.HasError() {
 		return diags
 	}
-	if d.TenantPermissions, diags = tenantPermissionsToNestedList(r.TenantPermissions, false); diags.HasError() {
+	if d.TenantPermissions, diags = tenantPermissionsToTerraformNestedList(r.TenantPermissions, false); diags.HasError() {
 		return diags
 	}
 
@@ -62,7 +64,7 @@ func (r *PluginSecurityRoleResource) Metadata(_ context.Context, req resource.Me
 	resp.TypeName = makeResourceName(req.ProviderTypeName, resourceSuffixSecurityPluginRole)
 }
 
-func (r *PluginSecurityRoleResource) Schema(_ context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (r *PluginSecurityRoleResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "OpenSearch Security Plugin Role",
 		Attributes: map[string]schema.Attribute{
@@ -132,33 +134,96 @@ func (r *PluginSecurityRoleResource) Schema(_ context.Context, req resource.Sche
 func (r *PluginSecurityRoleResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var (
 		roleName string
-		osReq    client.PluginSecurityRoleUpsertRequest
+		osRole   client.PluginSecurityRole
+		osReq    *client.PluginSecurityRoleUpsertRequest
 		osResp   *opensearchapi.Response
+		jsonB    []byte
 		err      error
-	)
-	role := new(PluginSecurityRoleResourceData)
 
-	resp.Diagnostics.Append(req.Plan.Get(ctx, role)...)
+		planData = new(PluginSecurityRoleResourceData)
+	)
+
+	// marshal plan value into data type, appending errors to response
+	resp.Diagnostics.Append(req.Plan.Get(ctx, planData)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
+	// extract role name
+	roleName = planData.RoleName.ValueString()
+
+	{
+		// attempt to locate existing role by name
+		osReq := &client.PluginSecurityRoleGetRequest{Name: roleName}
+		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		osResp, err := osReq.Do(ctx, r.client)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Error executing OpenSearch API query",
+				fmt.Sprintf("Received error querying for role %q: %v", roleName, err),
+			)
+			return
+		}
+
+		// if response is anything other than 404, assume big problem
+		if osResp.StatusCode != http.StatusNotFound {
+			resp.Diagnostics.AddError(
+				"Security Role already exists",
+				fmt.Sprintf("Cannot create new Security Role %q as it already exists in the cluster or your credentials do not have sufficient permissions", roleName),
+			)
+			return
+		}
+	}
+
+	// init request type
+	osReq = &client.PluginSecurityRoleUpsertRequest{
+		Name: roleName,
+	}
+
+	// convert plan data to opensearch model
+	osRole = terraformSecurityRoleToSecurityRole(planData)
+
+	if jsonB, err = json.Marshal(osRole); err != nil {
+		resp.Diagnostics.AddError(
+			"Error marshalling plan into OpenSearch request",
+			fmt.Sprintf("Error json-encoding plan data into OpenSearch request: %v", err),
+		)
+		return
+	}
+
+	// set request body
+	osReq.Body = bytes.NewReader(jsonB)
+
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	if osResp, err = osReq.Do(ctx, r.client); err != nil {
+		resp.Diagnostics.AddError(
+			"Error creating role",
+			fmt.Sprintf("Error executing create role request: %v", err),
+		)
+		return
+	}
+
+	//planData.UpdateFromRole(roleName, )
 }
 
 func (r *PluginSecurityRoleResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var (
-		roleName string
-		osReq    *client.PluginSecurityRoleGetRequest
-		osResp   *opensearchapi.Response
-		osRole   client.PluginSecurityRole
-		osRoles  client.PluginSecurityRoleList
-		ok       bool
-		err      error
+		roleName    string
+		osReq       *client.PluginSecurityRoleGetRequest
+		osResp      *opensearchapi.Response
+		osRole      client.PluginSecurityRole
+		osRoles     client.PluginSecurityRoleList
+		updateDiags diag.Diagnostics
+		ok          bool
+		err         error
 
 		stateData = new(PluginSecurityRoleResourceData)
 	)
 
-	// marshal state into data type, appending errors to response
+	// marshal state value into data type, appending errors to response
 	resp.Diagnostics.Append(req.State.Get(ctx, stateData)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -213,10 +278,19 @@ func (r *PluginSecurityRoleResource) Read(ctx context.Context, req resource.Read
 		return
 	}
 
-	diags := stateData.UpdateFromRole(roleName, osRole)
-	resp.Diagnostics.Append(diags.Warnings()...)
-	resp.Diagnostics.Append(diags.Errors()...)
+	// update data object from source role
+	updateDiags = stateData.UpdateFromRole(roleName, osRole)
 
+	// append any / all diagnostics to response diags
+	resp.Diagnostics.Append(updateDiags...)
+
+	// if there were errors, end now
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// update state from remote, appending any resulting diags
+	resp.Diagnostics.Append(resp.State.Set(ctx, &stateData)...)
 }
 
 func (r *PluginSecurityRoleResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
