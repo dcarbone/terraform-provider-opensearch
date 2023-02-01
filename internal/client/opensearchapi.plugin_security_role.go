@@ -16,23 +16,27 @@ func HandleResponseCleanup(r *opensearchapi.Response) {
 	}
 }
 
+type PluginSecurityRoleIndexPermission struct {
+	IndexPatterns  []string `json:"index_patterns"`
+	DLS            string   `json:"dls"`
+	FLS            string   `json:"fls"`
+	MaskedFields   []string `json:"masked_fields"`
+	AllowedActions []string `json:"allowed_actions"`
+}
+
+type PluginSecurityRoleTenantPermission struct {
+	TenantPatterns []string `json:"tenant_patterns"`
+	AllowedActions []string `json:"allowed_actions"`
+}
+
 type PluginSecurityRole struct {
 	RoleName string `json:"-"`
 
-	ClusterPermissions []string `json:"cluster_permissions"`
+	Description string `json:"description"`
 
-	IndexPermissions []struct {
-		IndexPatterns  []string `json:"index_patterns"`
-		DLS            string   `json:"dls"`
-		FLS            string   `json:"fls"`
-		MaskedFields   []string `json:"masked_fields"`
-		AllowedActions []string `json:"allowed_actions"`
-	} `json:"index_permissions"`
-
-	TenantPermissions []struct {
-		TenantPatterns []string `json:"tenant_patterns"`
-		AllowedActions []string `json:"allowed_actions"`
-	} `json:"tenant_permissions"`
+	ClusterPermissions []string                             `json:"cluster_permissions"`
+	IndexPermissions   []PluginSecurityRoleIndexPermission  `json:"index_permissions"`
+	TenantPermissions  []PluginSecurityRoleTenantPermission `json:"tenant_permissions"`
 
 	// these are only populated on GET
 

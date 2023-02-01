@@ -22,7 +22,7 @@ github.com/bgentry/speakeasy
 # github.com/davecgh/go-spew v1.1.1
 ## explicit
 github.com/davecgh/go-spew/spew
-# github.com/dcarbone/terraform-plugin-framework-utils/v3 v3.0.2
+# github.com/dcarbone/terraform-plugin-framework-utils/v3 v3.1.0
 ## explicit; go 1.19
 github.com/dcarbone/terraform-plugin-framework-utils/v3/conv
 github.com/dcarbone/terraform-plugin-framework-utils/v3/internal/util

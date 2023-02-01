@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/dcarbone/terraform-plugin-framework-utils/v3/conv"
 	"github.com/dcarbone/terraform-provider-opensearch/internal/client"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -32,6 +33,21 @@ type PluginSecurityRoleResourceData struct {
 	Reserved types.Bool `tfsdk:"reserved"`
 	Hidden   types.Bool `tfsdk:"hidden"`
 	Static   types.Bool `tfsdk:"static"`
+}
+
+func (d *PluginSecurityRoleResourceData) UpdateFromRole(ctx context.Context, roleName string, r client.PluginSecurityRole) {
+	d.RoleName = types.StringValue(roleName)
+	d.Description = types.StringValue(r.Description)
+	d.ClusterPermissions = conv.StringsToStringList(r.ClusterPermissions, true)
+
+	indexPerms := make(map[string])
+
+	d.IndexPermissions = types.List()
+
+	// set "computed" values
+	d.Hidden = conv.BoolPtrToBoolValue(r.Hidden)
+	d.Static = conv.BoolPtrToBoolValue(r.Static)
+	d.Reserved = conv.BoolPtrToBoolValue(r.Reserved)
 }
 
 func (r *PluginSecurityRoleResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -106,6 +122,12 @@ func (r *PluginSecurityRoleResource) Schema(_ context.Context, req resource.Sche
 }
 
 func (r *PluginSecurityRoleResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	var (
+		roleName string
+		osReq    client.PluginSecurityRoleUpsertRequest
+		osResp   *opensearchapi.Response
+		err      error
+	)
 	role := new(PluginSecurityRoleResourceData)
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, role)...)
@@ -183,11 +205,6 @@ func (r *PluginSecurityRoleResource) Read(ctx context.Context, req resource.Read
 		return
 	}
 
-	if osRole.Hidden != nil {
-		stateData.Hidden = types.BoolValue(*osRole.Hidden)
-	} else {
-		stateData.Hidden = types.BoolNull()
-	}
 }
 
 func (r *PluginSecurityRoleResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
