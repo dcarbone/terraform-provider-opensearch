@@ -7,23 +7,23 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 )
 
-type openSearchErrorErrorRootCause struct {
+type apiResponseEmbedErrorRootCause struct {
 	Type   string `json:"type"`
 	Reason string `json:"reason"`
 }
 
-func (e openSearchErrorErrorRootCause) Error() string {
+func (e apiResponseEmbedErrorRootCause) Error() string {
 	if e.Type == "" && e.Reason == "" {
 		return ""
 	}
 	return fmt.Sprintf("type=%q; reason=%q", e.Type, e.Reason)
 }
 
-type openSearchAPIErrorError struct {
-	RootCause []openSearchErrorErrorRootCause `json:"root_cause"`
+type apiResponseEmbedError struct {
+	RootCause []apiResponseEmbedErrorRootCause `json:"root_cause"`
 }
 
-func (e openSearchAPIErrorError) Error() string {
+func (e apiResponseEmbedError) Error() string {
 	// if no errors, return empty
 	if len(e.RootCause) == 0 {
 		return ""
@@ -46,22 +46,24 @@ func (e openSearchAPIErrorError) Error() string {
 	return finalErr.Error()
 }
 
-type openSearchAPIResponseError struct {
-	TheError *openSearchAPIErrorError `json:"error"`
+type apiResponseEmbed struct {
+	Status   string                 `json:"status"`
+	Message  string                 `json:"message"`
+	TheError *apiResponseEmbedError `json:"error"`
 }
 
-func (e openSearchAPIResponseError) HasErrors() bool {
+func (e apiResponseEmbed) HasErrors() bool {
 	return e.TheError != nil && len(e.TheError.RootCause) > 0
 }
 
-func (e openSearchAPIResponseError) Error() string {
+func (e apiResponseEmbed) Error() string {
 	if e.TheError == nil {
 		return ""
 	}
 	return e.TheError.Error()
 }
 
-func (e openSearchAPIResponseError) AddDiagnosticErrors(d diag.Diagnostics) {
+func (e apiResponseEmbed) AddDiagnosticErrors(d diag.Diagnostics) {
 	if !e.HasErrors() {
 		return
 	}

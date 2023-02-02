@@ -46,7 +46,7 @@ type PluginSecurityRole struct {
 }
 
 type PluginSecurityRoleList struct {
-	openSearchAPIResponseError
+	apiResponseEmbed
 
 	Roles map[string]PluginSecurityRole `json:"-"`
 }
@@ -58,12 +58,12 @@ func (r *PluginSecurityRoleList) UnmarshalJSON(b []byte) error {
 	}
 
 	if v, ok := m["error"]; ok {
-		errs := openSearchAPIResponseError{}
+		errs := apiResponseEmbed{}
 		if err := json.Unmarshal(v, &errs); err != nil {
 			return err
 		}
 		*r = PluginSecurityRoleList{
-			openSearchAPIResponseError: errs,
+			apiResponseEmbed: errs,
 		}
 		return nil
 	}
