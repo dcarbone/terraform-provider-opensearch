@@ -63,8 +63,8 @@ func ParseResponse(osResp *opensearchapi.Response, sink interface{}, okCodes ...
 		if err := json.NewDecoder(osResp.Body).Decode(sink); err != nil {
 			return err
 		}
-		// if the provided sink is of type *APIResponseMeta, add warnings from header to it
-		if m, ok := sink.(*APIResponseMeta); ok && osResp.HasWarnings() {
+		// if the provided sink is of type *APIStatusResponse, add warnings from header to it
+		if m, ok := sink.(*APIStatusResponse); ok && osResp.HasWarnings() {
 			w := osResp.Warnings()
 			m.WarningsHeader = make([]string, len(w))
 			copy(m.WarningsHeader, w)
@@ -73,7 +73,7 @@ func ParseResponse(osResp *opensearchapi.Response, sink interface{}, okCodes ...
 	}
 
 	// otherwise, attempt to unmarshal response into meta
-	meta := APIResponseMeta{}
+	meta := APIStatusResponse{}
 
 	// attempt to decode response
 	if err := json.NewDecoder(osResp.Body).Decode(&meta); err != nil {

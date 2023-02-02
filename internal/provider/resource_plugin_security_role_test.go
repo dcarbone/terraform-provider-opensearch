@@ -1,13 +1,12 @@
 package provider
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 )
 
-func TestAccPluginSecurityUser(t *testing.T) {
+func TestAccPluginSecurityRole(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -41,12 +40,4 @@ func TestAccPluginSecurityUser(t *testing.T) {
 			// Delete testing automatically occurs in TestCase
 		},
 	})
-}
-
-func testAccExampleResourceConfig(configurableAttribute string) string {
-	return fmt.Sprintf(`
-resource "scaffolding_example" "test" {
-  configurable_attribute = %[1]q
-}
-`, configurableAttribute)
 }

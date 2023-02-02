@@ -9,27 +9,27 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 )
 
-type APIResponseMetaErrorRootCause struct {
+type APIStatusResponseErrorRootCause struct {
 	Type   string `json:"type"`
 	Reason string `json:"reason"`
 }
 
-func (e APIResponseMetaErrorRootCause) Error() string {
+func (e APIStatusResponseErrorRootCause) Error() string {
 	return e.String()
 }
 
-func (e APIResponseMetaErrorRootCause) String() string {
+func (e APIStatusResponseErrorRootCause) String() string {
 	if e.Type == "" && e.Reason == "" {
 		return ""
 	}
 	return fmt.Sprintf("type=%q; reason=%q", e.Type, e.Reason)
 }
 
-type APIResponseMetaError struct {
-	RootCause []APIResponseMetaErrorRootCause `json:"root_cause"`
+type APIStatusResponseError struct {
+	RootCause []APIStatusResponseErrorRootCause `json:"root_cause"`
 }
 
-func (e APIResponseMetaError) Error() string {
+func (e APIStatusResponseError) Error() string {
 	// if no errors, return empty
 	if len(e.RootCause) == 0 {
 		return ""
@@ -52,30 +52,30 @@ func (e APIResponseMetaError) Error() string {
 	return finalErr.Error()
 }
 
-type APIResponseMeta struct {
-	Status        string                `json:"status"`
-	Message       string                `json:"message"`
-	ResponseError *APIResponseMetaError `json:"error"`
+type APIStatusResponse struct {
+	Status   string                  `json:"status"`
+	Message  string                  `json:"message"`
+	APIError *APIStatusResponseError `json:"error"`
 
 	WarningsHeader []string `json:"-"`
 }
 
-func (e APIResponseMeta) populated() bool {
-	return e.ResponseError != nil || e.Message != "" || e.Status != ""
+func (e APIStatusResponse) populated() bool {
+	return e.APIError != nil || e.Message != "" || e.Status != ""
 }
 
-func (e APIResponseMeta) HasErrors() bool {
-	return e.ResponseError != nil && len(e.ResponseError.RootCause) > 0
+func (e APIStatusResponse) HasErrors() bool {
+	return e.APIError != nil && len(e.APIError.RootCause) > 0
 }
 
-func (e APIResponseMeta) Error() string {
-	if e.ResponseError == nil {
+func (e APIStatusResponse) Error() string {
+	if e.APIError == nil {
 		return ""
 	}
-	return e.ResponseError.Error()
+	return e.APIError.Error()
 }
 
-func (e APIResponseMeta) String() string {
+func (e APIStatusResponse) String() string {
 	// construct output container
 	bits := make([]string, 0)
 
@@ -93,7 +93,7 @@ func (e APIResponseMeta) String() string {
 		}
 	}
 	if e.HasErrors() {
-		for i, rc := range e.ResponseError.RootCause {
+		for i, rc := range e.APIError.RootCause {
 			bits = append(
 				bits,
 				fmt.Sprintf("error_%d_type=%q", i, rc.Type),
@@ -102,14 +102,14 @@ func (e APIResponseMeta) String() string {
 		}
 	}
 
-	// if at least 1
+	// if at least 1 field contained a value
 	if len(bits) > 0 {
 		return strings.Join(bits, "; ")
 	}
 	return ""
 }
 
-func (e APIResponseMeta) AppendDiagnostics(d diag.Diagnostics) {
+func (e APIStatusResponse) AppendDiagnostics(d diag.Diagnostics) {
 	// add warnings from header
 	for _, w := range e.WarningsHeader {
 		d.AddWarning(
@@ -119,7 +119,7 @@ func (e APIResponseMeta) AppendDiagnostics(d diag.Diagnostics) {
 	}
 	// add any / all errors
 	if e.HasErrors() {
-		for _, source := range e.ResponseError.RootCause {
+		for _, source := range e.APIError.RootCause {
 			d.AddError(
 				source.Type,
 				source.Reason,
@@ -128,8 +128,8 @@ func (e APIResponseMeta) AppendDiagnostics(d diag.Diagnostics) {
 	}
 }
 
-func TryUnmarshalEmbed(b []byte) (APIResponseMeta, map[string]json.RawMessage, error) {
-	embed := APIResponseMeta{}
+func TryUnmarshalEmbed(b []byte) (APIStatusResponse, map[string]json.RawMessage, error) {
+	embed := APIStatusResponse{}
 
 	m := make(map[string]json.RawMessage)
 	if err := json.Unmarshal(b, &m); err != nil {
@@ -137,7 +137,7 @@ func TryUnmarshalEmbed(b []byte) (APIResponseMeta, map[string]json.RawMessage, e
 	}
 
 	if errs, ok := m["error"]; ok {
-		if err := json.Unmarshal(errs, embed.ResponseError); err != nil {
+		if err := json.Unmarshal(errs, embed.APIError); err != nil {
 			return embed, m, fmt.Errorf("error unmarshalling error: %w", err)
 		}
 	}

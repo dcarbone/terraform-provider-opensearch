@@ -14,7 +14,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/opensearch-project/opensearch-go/opensearchapi"
 )
 
 func NewPluginSecurityRoleResource() resource.Resource {
@@ -135,9 +134,6 @@ func (r *PluginSecurityRoleResource) Create(ctx context.Context, req resource.Cr
 	var (
 		roleName string
 		osRole   client.PluginSecurityRole
-		osReq    *client.PluginSecurityRoleUpsertRequest
-		osResp   *opensearchapi.Response
-		jsonB    []byte
 		err      error
 
 		planData = new(PluginSecurityRoleResourceData)
@@ -155,61 +151,79 @@ func (r *PluginSecurityRoleResource) Create(ctx context.Context, req resource.Cr
 	{
 		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
-		psResp, _ := fetchRoles(ctx, r.client, roleName, resp.Diagnostics)
-		if resp.Diagnostics.HasError() {
+		psResp, _, _ := tryFetchRoles(ctx, r.client, roleName)
+
+		if psResp != nil {
+			// if we got some kind of response from opensearch, test status code
+			if psResp.StatusCode == 200 {
+				resp.Diagnostics.AddError(
+					"Role already exists",
+					fmt.Sprintf("Role %q already exists in cluster", roleName),
+				)
+				return
+			}
+			// if we get here, assume that the role either does not already exists, or some kind of permission
+			// error occurred at this point, allow create attempt to happen.
+		} else if err != nil {
+			// if an error was seen, assume big badness
+			if m, ok := err.(client.APIStatusResponse); ok {
+				m.AppendDiagnostics(resp.Diagnostics)
+			} else {
+				resp.Diagnostics.AddError(
+					"Error querying for role",
+					fmt.Sprintf("Error occurred looking for existing role %q: %v", roleName, err.Error()),
+				)
+			}
 			return
 		}
-		if psResp.StatusCode == 200 {
+	}
+
+	// execute create request
+	{
+		// init request type
+		osReq := &client.PluginSecurityRoleUpsertRequest{
+			Name: roleName,
+		}
+
+		// convert plan data to opensearch model
+		osRole = terraformSecurityRoleToSecurityRole(planData)
+
+		jsonB, err := json.Marshal(osRole)
+		if err != nil {
 			resp.Diagnostics.AddError(
-				"Role not found",
-				fmt.Sprintf("Role %q was not found in cluster", roleName),
+				"Error marshalling plan into OpenSearch request",
+				fmt.Sprintf("Error json-encoding plan data into OpenSearch request: %v", err),
 			)
 			return
 		}
-	}
 
-	// init request type
-	osReq = &client.PluginSecurityRoleUpsertRequest{
-		Name: roleName,
-	}
+		// set request body
+		osReq.Body = bytes.NewReader(jsonB)
 
-	// convert plan data to opensearch model
-	osRole = terraformSecurityRoleToSecurityRole(planData)
-
-	if jsonB, err = json.Marshal(osRole); err != nil {
-		resp.Diagnostics.AddError(
-			"Error marshalling plan into OpenSearch request",
-			fmt.Sprintf("Error json-encoding plan data into OpenSearch request: %v", err),
-		)
-		return
-	}
-
-	// set request body
-	osReq.Body = bytes.NewReader(jsonB)
-
-	// execute create call
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	osResp, err = osReq.Do(ctx, r.client)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error creating role",
-			fmt.Sprintf("Error executing create role request: %v", err),
-		)
-		return
-	}
-
-	// attempt to parse response
-	if err = client.ParseResponse(osResp, &osRole, http.StatusOK); err != nil {
-		if m, ok := err.(client.APIResponseMeta); ok {
-			m.AppendDiagnostics(resp.Diagnostics)
-		} else {
+		// execute create call
+		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		osResp, err := osReq.Do(ctx, r.client)
+		if err != nil {
 			resp.Diagnostics.AddError(
-				"Error parsing create role response",
-				err.Error(),
+				"Error creating role",
+				fmt.Sprintf("Error executing create role request: %v", err),
 			)
+			return
 		}
-		return
+
+		// attempt to parse response
+		if err = client.ParseResponse(osResp, &osRole, http.StatusOK); err != nil {
+			if m, ok := err.(client.APIStatusResponse); ok {
+				m.AppendDiagnostics(resp.Diagnostics)
+			} else {
+				resp.Diagnostics.AddError(
+					"Error parsing create role response",
+					err.Error(),
+				)
+			}
+			return
+		}
 	}
 
 	// otherwise, try to update state model with new data
@@ -226,7 +240,6 @@ func (r *PluginSecurityRoleResource) Read(ctx context.Context, req resource.Read
 	var (
 		roleName    string
 		osRole      client.PluginSecurityRole
-		osRoles     client.PluginSecurityRolesAPIResponse
 		updateDiags diag.Diagnostics
 		ok          bool
 
@@ -247,19 +260,27 @@ func (r *PluginSecurityRoleResource) Read(ctx context.Context, req resource.Read
 	{
 		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
-		_, osRoles = fetchRoles(ctx, r.client, roleName, resp.Diagnostics)
-		if resp.Diagnostics.HasError() {
+		_, osRoles, err := tryFetchRoles(ctx, r.client, roleName)
+		if err != nil {
+			if m, ok := err.(client.APIStatusResponse); ok {
+				m.AppendDiagnostics(resp.Diagnostics)
+			} else {
+				resp.Diagnostics.AddError(
+					"Error querying for role",
+					fmt.Sprintf("Error occurred querying for role %q: %v", roleName, err.Error()),
+				)
+			}
 			return
 		}
-	}
 
-	// attempt to extract role from response
-	if osRole, ok = osRoles[roleName]; !ok {
-		resp.Diagnostics.AddError(
-			"Role not found",
-			fmt.Sprintf("Role %q not found", roleName),
-		)
-		return
+		// attempt to extract role from response
+		if osRole, ok = osRoles[roleName]; !ok {
+			resp.Diagnostics.AddError(
+				"Role not found",
+				fmt.Sprintf("Role %q not found", roleName),
+			)
+			return
+		}
 	}
 
 	// update data object from source role
@@ -278,13 +299,216 @@ func (r *PluginSecurityRoleResource) Read(ctx context.Context, req resource.Read
 }
 
 func (r *PluginSecurityRoleResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var (
+		roleName string
+		osRole   client.PluginSecurityRole
 
+		planData = new(PluginSecurityRoleResourceData)
+	)
+
+	// marshal plan value into data type, appending errors to response
+	resp.Diagnostics.Append(req.Plan.Get(ctx, planData)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// extract role name
+	roleName = planData.RoleName.ValueString()
+
+	// attempt to locate role in cluster
+	{
+		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		psResp, _, err := tryFetchRoles(ctx, r.client, roleName)
+		if err != nil {
+			if m, ok := err.(client.APIStatusResponse); ok {
+				m.AppendDiagnostics(resp.Diagnostics)
+			} else {
+				resp.Diagnostics.AddError(
+					"Error querying for role",
+					fmt.Sprintf("Error occurred querying for role %q: %v", roleName, err.Error()),
+				)
+			}
+			return
+		}
+
+		// if the role was not found, prevent the update call from creating a new one.
+		if psResp.StatusCode != 200 {
+			resp.Diagnostics.AddError(
+				"Role not found",
+				fmt.Sprintf("Role %q was not found in cluster", roleName),
+			)
+			return
+		}
+	}
+
+	// execute update call
+	{
+		// init request type
+		osReq := &client.PluginSecurityRoleUpsertRequest{
+			Name: roleName,
+		}
+
+		// convert plan data to opensearch model
+		osRole = terraformSecurityRoleToSecurityRole(planData)
+
+		jsonB, err := json.Marshal(osRole)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Error marshalling plan into OpenSearch request",
+				fmt.Sprintf("Error json-encoding plan data into OpenSearch request: %v", err),
+			)
+			return
+		}
+
+		// set request body
+		osReq.Body = bytes.NewReader(jsonB)
+
+		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		osResp, err := osReq.Do(ctx, r.client)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Error creating role",
+				fmt.Sprintf("Error executing create role request: %v", err),
+			)
+			return
+		}
+
+		// attempt to parse response
+		if err = client.ParseResponse(osResp, &osRole, http.StatusOK); err != nil {
+			if m, ok := err.(client.APIStatusResponse); ok {
+				m.AppendDiagnostics(resp.Diagnostics)
+			} else {
+				resp.Diagnostics.AddError(
+					"Error parsing create role response",
+					err.Error(),
+				)
+			}
+			return
+		}
+	}
+
+	// otherwise, try to update state model with new data
+	resp.Diagnostics.Append(planData.UpdateFromRole(roleName, osRole)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// finally, try to update state itself with updated model
+	resp.Diagnostics.Append(resp.State.Set(ctx, planData)...)
 }
 
 func (r *PluginSecurityRoleResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var (
+		roleName string
 
+		planData = new(PluginSecurityRoleResourceData)
+	)
+
+	// marshal plan value into data type, appending errors to response
+	resp.Diagnostics.Append(req.State.Get(ctx, planData)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// extract role name
+	roleName = planData.RoleName.ValueString()
+
+	// execute delete call
+	{
+		osReq := &client.PluginSecurityRoleDeleteRequest{
+			Name: roleName,
+		}
+
+		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		osResp, err := osReq.Do(ctx, r.client)
+		if err != nil {
+			if m, ok := err.(client.APIStatusResponse); ok {
+				m.AppendDiagnostics(resp.Diagnostics)
+			} else {
+				resp.Diagnostics.AddError(
+					"Error deleting role",
+					fmt.Sprintf("Error occurred deleting role %q: %v", roleName, err),
+				)
+			}
+			return
+		}
+
+		// attempt to parse response
+		sink := client.APIStatusResponse{}
+		if err = client.ParseResponse(osResp, &sink, http.StatusOK); err != nil {
+			if m, ok := err.(client.APIStatusResponse); ok {
+				m.AppendDiagnostics(resp.Diagnostics)
+			} else {
+				resp.Diagnostics.AddError(
+					"Error parsing create role response",
+					err.Error(),
+				)
+			}
+			return
+		}
+
+		if sink.HasErrors() {
+			sink.AppendDiagnostics(resp.Diagnostics)
+			return
+		}
+	}
 }
 
 func (r *PluginSecurityRoleResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	var (
+		roleName    string
+		osRole      client.PluginSecurityRole
+		updateDiags diag.Diagnostics
+		ok          bool
 
+		stateData = new(PluginSecurityRoleResourceData)
+	)
+
+	// extract role name
+	roleName = req.ID
+
+	// query for role from cluster
+	// done in sub-context to avoid poisoning ctx var
+	{
+		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		_, osRoles, err := tryFetchRoles(ctx, r.client, roleName)
+		if err != nil {
+			if m, ok := err.(client.APIStatusResponse); ok {
+				m.AppendDiagnostics(resp.Diagnostics)
+			} else {
+				resp.Diagnostics.AddError(
+					"Error querying for role",
+					fmt.Sprintf("Error occurred querying for role %q: %v", roleName, err.Error()),
+				)
+			}
+			return
+		}
+
+		// attempt to extract role from response
+		if osRole, ok = osRoles[roleName]; !ok {
+			resp.Diagnostics.AddError(
+				"Role not found",
+				fmt.Sprintf("Role %q not found", roleName),
+			)
+			return
+		}
+	}
+
+	// update data object from source role
+	updateDiags = stateData.UpdateFromRole(roleName, osRole)
+
+	// append any / all diagnostics to response diags
+	resp.Diagnostics.Append(updateDiags...)
+
+	// if there were errors, end now
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// update state from remote, appending any resulting diags
+	resp.Diagnostics.Append(resp.State.Set(ctx, &stateData)...)
 }

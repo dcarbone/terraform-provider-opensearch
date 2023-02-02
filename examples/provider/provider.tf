@@ -1,3 +1,3 @@
-provider "scaffolding" {
+provider "opensearch" {
   # example configuration here
 }
