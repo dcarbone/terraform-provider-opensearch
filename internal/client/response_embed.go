@@ -15,6 +15,10 @@ type APIResponseMetaErrorRootCause struct {
 }
 
 func (e APIResponseMetaErrorRootCause) Error() string {
+	return e.String()
+}
+
+func (e APIResponseMetaErrorRootCause) String() string {
 	if e.Type == "" && e.Reason == "" {
 		return ""
 	}
@@ -49,52 +53,78 @@ func (e APIResponseMetaError) Error() string {
 }
 
 type APIResponseMeta struct {
-	Status   string                `json:"status"`
-	Message  string                `json:"message"`
-	TheError *APIResponseMetaError `json:"error"`
-}
+	Status        string                `json:"status"`
+	Message       string                `json:"message"`
+	ResponseError *APIResponseMetaError `json:"error"`
 
-func (e APIResponseMeta) HasErrors() bool {
-	return e.TheError != nil && len(e.TheError.RootCause) > 0
-}
-
-func (e APIResponseMeta) Error() string {
-	if e.TheError == nil {
-		return ""
-	}
-	return e.TheError.Error()
+	WarningsHeader []string `json:"-"`
 }
 
 func (e APIResponseMeta) populated() bool {
-	return e.TheError != nil || e.Message != "" || e.Status != ""
+	return e.ResponseError != nil || e.Message != "" || e.Status != ""
+}
+
+func (e APIResponseMeta) HasErrors() bool {
+	return e.ResponseError != nil && len(e.ResponseError.RootCause) > 0
+}
+
+func (e APIResponseMeta) Error() string {
+	if e.ResponseError == nil {
+		return ""
+	}
+	return e.ResponseError.Error()
 }
 
 func (e APIResponseMeta) String() string {
+	// construct output container
 	bits := make([]string, 0)
+
+	// check each field for "non-empty"
+
 	if e.Status != "" {
 		bits = append(bits, fmt.Sprintf("status=%q", e.Status))
 	}
 	if e.Message != "" {
 		bits = append(bits, fmt.Sprintf("message=%q", e.Message))
 	}
-	if e.HasErrors() {
-		bits = append(bits, fmt.Sprintf("errors=%q", e.Error()))
+	if len(e.WarningsHeader) > 0 {
+		for i, w := range e.WarningsHeader {
+			bits = append(bits, fmt.Sprintf("warning_%d=%q", i, w))
+		}
 	}
+	if e.HasErrors() {
+		for i, rc := range e.ResponseError.RootCause {
+			bits = append(
+				bits,
+				fmt.Sprintf("error_%d_type=%q", i, rc.Type),
+				fmt.Sprintf("error_%d_reason=%q", i, rc.Reason),
+			)
+		}
+	}
+
+	// if at least 1
 	if len(bits) > 0 {
 		return strings.Join(bits, "; ")
 	}
 	return ""
 }
 
-func (e APIResponseMeta) AppendErrorsToDiagnostic(d diag.Diagnostics) {
-	if !e.HasErrors() {
-		return
-	}
-	for _, source := range e.TheError.RootCause {
-		d.AddError(
-			source.Reason,
-			source.Error(),
+func (e APIResponseMeta) AppendDiagnostics(d diag.Diagnostics) {
+	// add warnings from header
+	for _, w := range e.WarningsHeader {
+		d.AddWarning(
+			w,
+			w,
 		)
+	}
+	// add any / all errors
+	if e.HasErrors() {
+		for _, source := range e.ResponseError.RootCause {
+			d.AddError(
+				source.Type,
+				source.Reason,
+			)
+		}
 	}
 }
 
@@ -107,7 +137,7 @@ func TryUnmarshalEmbed(b []byte) (APIResponseMeta, map[string]json.RawMessage, e
 	}
 
 	if errs, ok := m["error"]; ok {
-		if err := json.Unmarshal(errs, embed.TheError); err != nil {
+		if err := json.Unmarshal(errs, embed.ResponseError); err != nil {
 			return embed, m, fmt.Errorf("error unmarshalling error: %w", err)
 		}
 	}

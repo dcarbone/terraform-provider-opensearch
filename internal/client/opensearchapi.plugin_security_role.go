@@ -2,7 +2,6 @@ package client
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -45,43 +44,7 @@ type PluginSecurityRole struct {
 	Static   *bool `json:"static,omitempty" tfsdk:"static"`
 }
 
-type PluginSecurityRolesAPIResponse struct {
-	APIResponseMeta
-
-	Roles map[string]PluginSecurityRole `json:"-"`
-}
-
-func (r *PluginSecurityRolesAPIResponse) UnmarshalJSON(b []byte) error {
-	// try to unmarshal the embedded "common" response instance
-	embed, data, err := TryUnmarshalEmbed(b)
-	if err != nil {
-		return err
-	}
-
-	// if its populated, return only the parent model with the embed
-	if embed.populated() {
-		*r = PluginSecurityRolesAPIResponse{
-			APIResponseMeta: embed,
-		}
-		return nil
-	}
-
-	// otherwise, init with Roles map
-	*r = PluginSecurityRolesAPIResponse{
-		Roles: make(map[string]PluginSecurityRole),
-	}
-
-	// iterate over remaining data fields, unmarshalling them each into a role
-	for k, v := range data {
-		tmpRole := PluginSecurityRole{}
-		if err := json.Unmarshal(v, &tmpRole); err != nil {
-			return err
-		}
-		r.Roles[k] = tmpRole
-	}
-
-	return nil
-}
+type PluginSecurityRolesAPIResponse map[string]PluginSecurityRole
 
 type PluginSecurityRolesGetRequest struct {
 	Name string

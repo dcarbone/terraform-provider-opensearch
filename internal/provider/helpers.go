@@ -2,8 +2,8 @@ package provider
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/dcarbone/terraform-provider-opensearch/internal/client"
@@ -12,7 +12,7 @@ import (
 	"github.com/opensearch-project/opensearch-go/opensearchapi"
 )
 
-func fetchRoles(ctx context.Context, osClient *opensearch.Client, roleName string, diags diag.Diagnostics) (*client.PluginSecurityRolesAPIResponse, *opensearchapi.Response) {
+func fetchRoles(ctx context.Context, osClient *opensearch.Client, roleName string, diags diag.Diagnostics) (*opensearchapi.Response, client.PluginSecurityRolesAPIResponse) {
 	// init opensearch request
 	osReq := client.PluginSecurityRolesGetRequest{
 		Name: roleName,
@@ -21,25 +21,22 @@ func fetchRoles(ctx context.Context, osClient *opensearch.Client, roleName strin
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	osResp, err := osReq.Do(ctx, osClient)
-
-	defer client.HandleResponseCleanup(osResp)
-
 	if err != nil {
 		diags.AddError(
 			"Error querying for role",
 			fmt.Sprintf("Error occured querying for role %q: %v", roleName, err),
 		)
-		return nil, osResp
+		return osResp, nil
 	}
 
-	roleResp := new(client.PluginSecurityRolesAPIResponse)
-	if err := json.NewDecoder(osResp.Body).Decode(roleResp); err != nil {
-		diags.AddError(
-			"Error unmarshalling role",
-			fmt.Sprintf("Error occurred while unmarshalling API response: %v", err),
-		)
-		return nil, osResp
+	// attempt to decode response
+	roleResp := make(client.PluginSecurityRolesAPIResponse)
+	if err = client.ParseResponse(osResp, &roleResp, http.StatusOK); err != nil {
+		if m, ok := err.(client.APIResponseMeta); ok {
+			m.AppendDiagnostics(diags)
+			return osResp, nil
+		}
 	}
 
-	return roleResp, osResp
+	return osResp, roleResp
 }

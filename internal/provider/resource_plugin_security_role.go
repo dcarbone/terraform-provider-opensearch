@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/dcarbone/terraform-plugin-framework-utils/v3/conv"
@@ -134,11 +135,9 @@ func (r *PluginSecurityRoleResource) Create(ctx context.Context, req resource.Cr
 	var (
 		roleName string
 		osRole   client.PluginSecurityRole
-		osRoles  *client.PluginSecurityRolesAPIResponse
 		osReq    *client.PluginSecurityRoleUpsertRequest
 		osResp   *opensearchapi.Response
 		jsonB    []byte
-		ok       bool
 		err      error
 
 		planData = new(PluginSecurityRoleResourceData)
@@ -156,7 +155,7 @@ func (r *PluginSecurityRoleResource) Create(ctx context.Context, req resource.Cr
 	{
 		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
-		_, psResp := fetchRoles(ctx, r.client, roleName, resp.Diagnostics)
+		psResp, _ := fetchRoles(ctx, r.client, roleName, resp.Diagnostics)
 		if resp.Diagnostics.HasError() {
 			return
 		}
@@ -192,7 +191,6 @@ func (r *PluginSecurityRoleResource) Create(ctx context.Context, req resource.Cr
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	osResp, err = osReq.Do(ctx, r.client)
-	defer client.HandleResponseCleanup(osResp)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error creating role",
@@ -201,13 +199,34 @@ func (r *PluginSecurityRoleResource) Create(ctx context.Context, req resource.Cr
 		return
 	}
 
+	// attempt to parse response
+	if err = client.ParseResponse(osResp, &osRole, http.StatusOK); err != nil {
+		if m, ok := err.(client.APIResponseMeta); ok {
+			m.AppendDiagnostics(resp.Diagnostics)
+		} else {
+			resp.Diagnostics.AddError(
+				"Error parsing create role response",
+				err.Error(),
+			)
+		}
+		return
+	}
+
+	// otherwise, try to update state model with new data
+	resp.Diagnostics.Append(planData.UpdateFromRole(roleName, osRole)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// finally, try to update state itself with updated model
+	resp.Diagnostics.Append(resp.State.Set(ctx, planData)...)
 }
 
 func (r *PluginSecurityRoleResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var (
 		roleName    string
 		osRole      client.PluginSecurityRole
-		osRoles     *client.PluginSecurityRolesAPIResponse
+		osRoles     client.PluginSecurityRolesAPIResponse
 		updateDiags diag.Diagnostics
 		ok          bool
 
@@ -228,14 +247,14 @@ func (r *PluginSecurityRoleResource) Read(ctx context.Context, req resource.Read
 	{
 		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
-		osRoles, _ = fetchRoles(ctx, r.client, roleName, resp.Diagnostics)
+		_, osRoles = fetchRoles(ctx, r.client, roleName, resp.Diagnostics)
 		if resp.Diagnostics.HasError() {
 			return
 		}
 	}
 
 	// attempt to extract role from response
-	if osRole, ok = osRoles.Roles[roleName]; !ok {
+	if osRole, ok = osRoles[roleName]; !ok {
 		resp.Diagnostics.AddError(
 			"Role not found",
 			fmt.Sprintf("Role %q not found", roleName),
