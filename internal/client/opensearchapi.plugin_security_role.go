@@ -118,7 +118,7 @@ func (r *PluginSecurityRoleDeleteRequest) Do(ctx context.Context, transport open
 		err  error
 	)
 
-	path = fmt.Sprintf("/_plugins/_security/roles/%s", r.Name)
+	path = fmt.Sprintf("/_plugins/_security/api/roles/%s", r.Name)
 
 	if req, err = newOpenSearchRequest(ctx, http.MethodDelete, path, nil); err != nil {
 		return nil, err
@@ -176,10 +176,14 @@ func (r *PluginSecurityRoleUpsertRequest) Do(ctx context.Context, transport open
 		err  error
 	)
 
-	path = fmt.Sprintf("/_plugins/_security/roles/%s", r.Name)
+	path = fmt.Sprintf("/_plugins/_security/api/roles/%s", r.Name)
 
 	if req, err = newOpenSearchRequest(ctx, http.MethodPut, path, r.Body); err != nil {
 		return nil, err
+	}
+
+	if r.Body != nil {
+		req.Header[headerContentType] = headerContentTypeJSON
 	}
 
 	addOpenSearchRequestHeaders(req, r.Header)

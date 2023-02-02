@@ -9,11 +9,13 @@ import (
 	"time"
 
 	"github.com/dcarbone/terraform-plugin-framework-utils/v3/conv"
+	"github.com/dcarbone/terraform-plugin-framework-utils/v3/validation"
 	"github.com/dcarbone/terraform-provider-opensearch/internal/client"
 	"github.com/dcarbone/terraform-provider-opensearch/internal/fields"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -61,7 +63,7 @@ func (d *PluginSecurityRoleResourceData) UpdateFromRole(roleName string, r clien
 }
 
 func (r *PluginSecurityRoleResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = fields.MakeResourceName(req.ProviderTypeName, fields.ResourceSuffixSecurityPluginRole)
+	resp.TypeName = fields.TypeName(req.ProviderTypeName, fields.ResourceTypeSecurityPluginRole)
 }
 
 func (r *PluginSecurityRoleResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
@@ -70,6 +72,9 @@ func (r *PluginSecurityRoleResource) Schema(_ context.Context, _ resource.Schema
 		Attributes: map[string]schema.Attribute{
 			fields.ResourceAttrRoleName: schema.StringAttribute{
 				Required: true,
+				Validators: []validator.String{
+					validation.Required(),
+				},
 			},
 			fields.ResourceAttrDescription: schema.StringAttribute{
 				Optional: true,

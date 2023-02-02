@@ -23,6 +23,12 @@ import (
 	"github.com/opensearch-project/opensearch-go/opensearchapi"
 )
 
+type OpenSearchProviderConfigLogging struct {
+	Enabled             types.Bool `tfsdk:"enabled"`
+	IncludeRequestBody  types.Bool `tfsdk:"include_request_body"`
+	IncludeResponseBody types.Bool `tfsdk:"include_response_body"`
+}
+
 type OpenSearchProviderConfig struct {
 	Addresses types.List `tfsdk:"addresses"`
 
@@ -42,12 +48,6 @@ type OpenSearchProviderConfig struct {
 	SkipInitProductCheck  types.Bool `tfsdk:"skip_init_product_check"`
 
 	Logging types.Object `tfsdk:"logging"`
-}
-
-type OpenSearchProviderConfigLogging struct {
-	Enabled             types.Bool `tfsdk:"enabled"`
-	IncludeRequestBody  types.Bool `tfsdk:"include_request_body"`
-	IncludeResponseBody types.Bool `tfsdk:"include_response_body"`
 }
 
 var _ provider.Provider = &OpenSearchProvider{}
@@ -87,7 +87,7 @@ func (p *OpenSearchProvider) Schema(_ context.Context, _ provider.SchemaRequest,
 				Sensitive:   true,
 				Optional:    true,
 			},
-			fields.ConfigAttrRetryOnStatuses: schema.ListAttribute{
+			fields.ConfigAttrRetryOnStatus: schema.ListAttribute{
 				Description: "List of status codes for retry",
 				Optional:    true,
 				ElementType: types.Int64Type,
@@ -135,13 +135,12 @@ func (p *OpenSearchProvider) Schema(_ context.Context, _ provider.SchemaRequest,
 
 func (p *OpenSearchProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
 	var (
-		conf    OpenSearchProviderConfig
-		logConf = OpenSearchProviderConfigLogging{}
-
+		conf     OpenSearchProviderConfig
+		logConf  OpenSearchProviderConfigLogging
 		osConfig opensearch.Config
 		osClient *opensearch.Client
-
-		shared Shared
+		shared   Shared
+		err      error
 
 		// create pooled transport
 		transport = cleanhttp.DefaultPooledTransport()
@@ -179,8 +178,22 @@ func (p *OpenSearchProvider) Configure(ctx context.Context, req provider.Configu
 		osConfig.CACert = []byte(conf.CACert.ValueString())
 	}
 
-	// if there were any errors during config, bail out now
-	if resp.Diagnostics.HasError() {
+	// attempt to unmarshal logging config
+	if diags := conf.Logging.As(ctx, &logConf, basetypes.ObjectAsOptions{UnhandledNullAsEmpty: true, UnhandledUnknownAsEmpty: true}); diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
+
+	// if client logging enabled, configure it
+	if logConf.Enabled.ValueBool() {
+		osConfig.Logger = client.NewTerraformLogger(ctx, logConf.IncludeRequestBody.ValueBool(), logConf.IncludeResponseBody.ValueBool())
+	}
+
+	if osClient, err = opensearch.NewClient(osConfig); err != nil {
+		resp.Diagnostics.AddError(
+			"Error constructing OpenSearch client",
+			fmt.Sprintf("Error occurred constructing OpenSearch client: %v", err.Error()),
+		)
 		return
 	}
 
@@ -196,17 +209,6 @@ func (p *OpenSearchProvider) Configure(ctx context.Context, req provider.Configu
 			)
 			return
 		}
-	}
-
-	// attempt to unmarshal logging config
-	if diags := conf.Logging.As(ctx, &logConf, basetypes.ObjectAsOptions{}); diags.HasError() {
-		resp.Diagnostics.Append(diags...)
-		return
-	}
-
-	// if client logging enabled, configure it
-	if logConf.Enabled.ValueBool() {
-		osConfig.Logger = client.NewTerraformLogger(ctx, logConf.IncludeRequestBody.ValueBool(), logConf.IncludeResponseBody.ValueBool())
 	}
 
 	// create shared object for use in resource and datasource types

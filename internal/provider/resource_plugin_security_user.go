@@ -42,7 +42,7 @@ type PluginSecurityUserResourceData struct {
 }
 
 func (r *PluginSecurityUserResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = fields.MakeResourceName(req.ProviderTypeName, fields.ResourceSuffixSecurityPluginUser)
+	resp.TypeName = fields.TypeName(req.ProviderTypeName, fields.ResourceTypeSecurityPluginUser)
 }
 
 func (r *PluginSecurityUserResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {

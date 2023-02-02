@@ -31,7 +31,6 @@ func (tl TerraformLogger) LogRoundTrip(req *http.Request, resp *http.Response, e
 		logFields = map[string]interface{}{
 			"start":    start.Format(time.RFC3339),
 			"duration": dur,
-			"err":      err.Error(),
 		}
 	)
 
@@ -48,18 +47,19 @@ func (tl TerraformLogger) LogRoundTrip(req *http.Request, resp *http.Response, e
 		logFields["url"] = req.URL.String()
 		if tl.reqBodyEnabled && req.Body != nil {
 			reqBodyBytes, _ := io.ReadAll(req.Body)
-			logFields["request_body"] = reqBodyBytes
+			logFields["request_body"] = string(reqBodyBytes)
 			logFields["request_body_len"] = len(reqBodyBytes)
 		}
 	}
 
 	if tl.respBodyEnabled && resp != nil && resp.Body != nil {
 		respBodyBytes, _ := io.ReadAll(resp.Body)
-		logFields["response_body"] = respBodyBytes
+		logFields["response_body"] = string(respBodyBytes)
 		logFields["response_body_len"] = len(respBodyBytes)
 	}
 
 	if err != nil {
+		logFields["err"] = err.Error()
 		tflog.Error(tl.provCTX, fmt.Sprintf("OpenSearch client error: %v", err), logFields)
 	} else {
 		tflog.Trace(tl.provCTX, "OpenSearch client query tracer", logFields)

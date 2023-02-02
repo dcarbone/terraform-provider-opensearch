@@ -11,7 +11,7 @@ const (
 	ConfigAttrUsername              = "username"
 	ConfigAttrPassword              = "password"
 	ConfigAttrCACert                = "ca_cert"
-	ConfigAttrRetryOnStatuses       = "retry_on_statuses"
+	ConfigAttrRetryOnStatus         = "retry_on_status"
 	ConfigAttrDisableRetry          = "disable_retry"
 	ConfigAttrEnableRetryOnTimeout  = "enable_retry_on_timeout"
 	ConfigAttrMaxRetries            = "max_retries"
@@ -26,8 +26,8 @@ const (
 )
 
 const (
-	ResourceSuffixSecurityPluginRole = "security_plugin_role"
-	ResourceSuffixSecurityPluginUser = "security_plugin_user"
+	ResourceTypeSecurityPluginRole = "security_plugin_role"
+	ResourceTypeSecurityPluginUser = "security_plugin_user"
 )
 
 const (
@@ -54,10 +54,17 @@ const (
 	ResourceAttrUsername                = "username"
 )
 
-func MakeResourceName(providerName, suffix string) string {
-	return fmt.Sprintf("%s_%s", providerName, suffix)
+func TypeName(providerName, typeName string) string {
+	const f = "%s_%s"
+	return fmt.Sprintf(f, providerName, typeName)
 }
 
-func MakeDatasourceName(providerName, suffix string) string {
-	return fmt.Sprintf("%s_%s", providerName, suffix)
+func ResourceTypeFQN(providerName, typeName, resourceName string) string {
+	const f = "%s.%s"
+	return fmt.Sprintf(f, TypeName(providerName, typeName), resourceName)
+}
+
+func DatasourceTypeFQN(providerName, typeName, datasourceName string) string {
+	const f = "data.%s.%s"
+	return fmt.Sprintf(f, TypeName(providerName, typeName), datasourceName)
 }
