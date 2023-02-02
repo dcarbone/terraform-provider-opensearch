@@ -3,28 +3,29 @@ package client
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/hashicorp/go-multierror"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 )
 
-type apiResponseEmbedErrorRootCause struct {
+type APIResponseMetaErrorRootCause struct {
 	Type   string `json:"type"`
 	Reason string `json:"reason"`
 }
 
-func (e apiResponseEmbedErrorRootCause) Error() string {
+func (e APIResponseMetaErrorRootCause) Error() string {
 	if e.Type == "" && e.Reason == "" {
 		return ""
 	}
 	return fmt.Sprintf("type=%q; reason=%q", e.Type, e.Reason)
 }
 
-type apiResponseEmbedError struct {
-	RootCause []apiResponseEmbedErrorRootCause `json:"root_cause"`
+type APIResponseMetaError struct {
+	RootCause []APIResponseMetaErrorRootCause `json:"root_cause"`
 }
 
-func (e apiResponseEmbedError) Error() string {
+func (e APIResponseMetaError) Error() string {
 	// if no errors, return empty
 	if len(e.RootCause) == 0 {
 		return ""
@@ -47,28 +48,45 @@ func (e apiResponseEmbedError) Error() string {
 	return finalErr.Error()
 }
 
-type apiResponseEmbed struct {
-	Status   string                 `json:"status"`
-	Message  string                 `json:"message"`
-	TheError *apiResponseEmbedError `json:"error"`
+type APIResponseMeta struct {
+	Status   string                `json:"status"`
+	Message  string                `json:"message"`
+	TheError *APIResponseMetaError `json:"error"`
 }
 
-func (e apiResponseEmbed) HasErrors() bool {
+func (e APIResponseMeta) HasErrors() bool {
 	return e.TheError != nil && len(e.TheError.RootCause) > 0
 }
 
-func (e apiResponseEmbed) Error() string {
+func (e APIResponseMeta) Error() string {
 	if e.TheError == nil {
 		return ""
 	}
 	return e.TheError.Error()
 }
 
-func (e apiResponseEmbed) populated() bool {
+func (e APIResponseMeta) populated() bool {
 	return e.TheError != nil || e.Message != "" || e.Status != ""
 }
 
-func (e apiResponseEmbed) AppendErrorsToDiagnostic(d diag.Diagnostics) {
+func (e APIResponseMeta) String() string {
+	bits := make([]string, 0)
+	if e.Status != "" {
+		bits = append(bits, fmt.Sprintf("status=%q", e.Status))
+	}
+	if e.Message != "" {
+		bits = append(bits, fmt.Sprintf("message=%q", e.Message))
+	}
+	if e.HasErrors() {
+		bits = append(bits, fmt.Sprintf("errors=%q", e.Error()))
+	}
+	if len(bits) > 0 {
+		return strings.Join(bits, "; ")
+	}
+	return ""
+}
+
+func (e APIResponseMeta) AppendErrorsToDiagnostic(d diag.Diagnostics) {
 	if !e.HasErrors() {
 		return
 	}
@@ -80,8 +98,8 @@ func (e apiResponseEmbed) AppendErrorsToDiagnostic(d diag.Diagnostics) {
 	}
 }
 
-func tryUnmarshalEmbed(b []byte) (apiResponseEmbed, map[string]json.RawMessage, error) {
-	embed := apiResponseEmbed{}
+func TryUnmarshalEmbed(b []byte) (APIResponseMeta, map[string]json.RawMessage, error) {
+	embed := APIResponseMeta{}
 
 	m := make(map[string]json.RawMessage)
 	if err := json.Unmarshal(b, &m); err != nil {

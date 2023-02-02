@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"time"
 
 	"github.com/dcarbone/terraform-plugin-framework-utils/v3/conv"
@@ -135,9 +134,11 @@ func (r *PluginSecurityRoleResource) Create(ctx context.Context, req resource.Cr
 	var (
 		roleName string
 		osRole   client.PluginSecurityRole
+		osRoles  *client.PluginSecurityRolesAPIResponse
 		osReq    *client.PluginSecurityRoleUpsertRequest
 		osResp   *opensearchapi.Response
 		jsonB    []byte
+		ok       bool
 		err      error
 
 		planData = new(PluginSecurityRoleResourceData)
@@ -153,24 +154,16 @@ func (r *PluginSecurityRoleResource) Create(ctx context.Context, req resource.Cr
 	roleName = planData.RoleName.ValueString()
 
 	{
-		// attempt to locate existing role by name
-		osReq := &client.PluginSecurityRoleGetRequest{Name: roleName}
 		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
-		osResp, err := osReq.Do(ctx, r.client)
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Error executing OpenSearch API query",
-				fmt.Sprintf("Received error querying for role %q: %v", roleName, err),
-			)
+		_, psResp := fetchRoles(ctx, r.client, roleName, resp.Diagnostics)
+		if resp.Diagnostics.HasError() {
 			return
 		}
-
-		// if response is anything other than 404, assume big problem
-		if osResp.StatusCode != http.StatusNotFound {
+		if psResp.StatusCode == 200 {
 			resp.Diagnostics.AddError(
-				"Security Role already exists",
-				fmt.Sprintf("Cannot create new Security Role %q as it already exists in the cluster or your credentials do not have sufficient permissions", roleName),
+				"Role not found",
+				fmt.Sprintf("Role %q was not found in cluster", roleName),
 			)
 			return
 		}
@@ -195,10 +188,12 @@ func (r *PluginSecurityRoleResource) Create(ctx context.Context, req resource.Cr
 	// set request body
 	osReq.Body = bytes.NewReader(jsonB)
 
+	// execute create call
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-
-	if osResp, err = osReq.Do(ctx, r.client); err != nil {
+	osResp, err = osReq.Do(ctx, r.client)
+	defer client.HandleResponseCleanup(osResp)
+	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error creating role",
 			fmt.Sprintf("Error executing create role request: %v", err),
@@ -206,19 +201,15 @@ func (r *PluginSecurityRoleResource) Create(ctx context.Context, req resource.Cr
 		return
 	}
 
-	//planData.UpdateFromRole(roleName, )
 }
 
 func (r *PluginSecurityRoleResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var (
 		roleName    string
-		osReq       *client.PluginSecurityRoleGetRequest
-		osResp      *opensearchapi.Response
 		osRole      client.PluginSecurityRole
-		osRoles     client.PluginSecurityRoleList
+		osRoles     *client.PluginSecurityRolesAPIResponse
 		updateDiags diag.Diagnostics
 		ok          bool
-		err         error
 
 		stateData = new(PluginSecurityRoleResourceData)
 	)
@@ -232,44 +223,18 @@ func (r *PluginSecurityRoleResource) Read(ctx context.Context, req resource.Read
 	// extract role name
 	roleName = stateData.RoleName.ValueString()
 
-	// prepare opensearch api request
-	osReq = &client.PluginSecurityRoleGetRequest{
-		Name: roleName,
+	// query for role from cluster
+	// done in sub-context to avoid poisoning ctx var
+	{
+		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		osRoles, _ = fetchRoles(ctx, r.client, roleName, resp.Diagnostics)
+		if resp.Diagnostics.HasError() {
+			return
+		}
 	}
 
-	// construct request context
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-
-	// execute query, and set up response body cleanup
-	osResp, err = osReq.Do(ctx, r.client)
-	defer client.HandleResponseCleanup(osResp)
-
-	// check for client error
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error executing OpenSearch API query",
-			fmt.Sprintf("Received error querying for role %q: %v", roleName, err),
-		)
-		return
-	}
-
-	// decode response
-	if err = json.NewDecoder(osResp.Body).Decode(&osRoles); err != nil {
-		resp.Diagnostics.AddError(
-			"Error decoding OpenSearch Role response",
-			fmt.Sprintf("Error decoding OpenSearch Role: %v", err),
-		)
-		return
-	}
-
-	// check for api errors
-	if osRoles.HasErrors() {
-		osRoles.AppendErrorsToDiagnostic(resp.Diagnostics)
-		return
-	}
-
-	// locate specific role
+	// attempt to extract role from response
 	if osRole, ok = osRoles.Roles[roleName]; !ok {
 		resp.Diagnostics.AddError(
 			"Role not found",
