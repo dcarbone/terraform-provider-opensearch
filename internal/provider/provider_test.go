@@ -25,13 +25,55 @@ func TestBuild_Provider(t *testing.T) {
 }
 
 func TestUnit_ProviderConfig(t *testing.T) {
-	t.Run("from-env", func(t *testing.T) {
+	t.Run("env", func(t *testing.T) {
 		resource.Test(t, resource.TestCase{
 			ProtoV6ProviderFactories: protoV6ProviderFactories,
 			IsUnitTest:               true,
 			Steps: []resource.TestStep{
 				{
-					Config: acctest.ProviderConfigEmpty(),
+					Config: acctest.ProviderConfigWith(),
+				},
+			},
+		})
+	})
+
+	t.Run("static", func(t *testing.T) {
+		resource.Test(t, resource.TestCase{
+			ProtoV6ProviderFactories: protoV6ProviderFactories,
+			IsUnitTest:               true,
+			Steps: []resource.TestStep{
+				{
+					Config: acctest.ProviderConfigLocalhostWith(nil),
+				},
+			},
+		})
+	})
+
+	t.Run("static-skip-init", func(t *testing.T) {
+		resource.Test(t, resource.TestCase{
+			ProtoV6ProviderFactories: protoV6ProviderFactories,
+			IsUnitTest:               true,
+			Steps: []resource.TestStep{
+				{
+					Config: acctest.ProviderConfigLocalhostWith(map[string]interface{}{
+						fields.ConfigAttrSkipInitProductCheck: true,
+					}),
+				},
+			},
+		})
+	})
+
+	t.Run("static-with-logger", func(t *testing.T) {
+		resource.Test(t, resource.TestCase{
+			ProtoV6ProviderFactories: protoV6ProviderFactories,
+			IsUnitTest:               true,
+			Steps: []resource.TestStep{
+				{
+					Config: acctest.ProviderConfigLocalhostWith(map[string]interface{}{
+						fields.ConfigAttrLogging: map[string]interface{}{
+							fields.ConfigAttrEnabled: true,
+						},
+					}),
 				},
 			},
 		})

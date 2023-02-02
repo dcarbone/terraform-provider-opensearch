@@ -19,6 +19,10 @@ const (
 	ConfigAttrInsecureSkipTLSVerify = "insecure_skip_tls_verify"
 	ConfigAttrUseResponseCheckOnly  = "use_response_check_only"
 	ConfigAttrSkipInitProductCheck  = "skip_init_product_check"
+	ConfigAttrLogging               = "logging"
+	ConfigAttrEnabled               = "enabled"
+	ConfigAttrIncludeRequestBody    = "include_request_body"
+	ConfigAttrIncludeResponseBody   = "include_response_body"
 )
 
 const (

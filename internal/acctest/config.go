@@ -5,16 +5,15 @@ import (
 	"github.com/dcarbone/terraform-provider-opensearch/internal/fields"
 )
 
-func ProviderConfigEmpty() string {
+func ProviderConfigWith(extra ...map[string]interface{}) string {
 	return at.CompileProviderConfig(
 		fields.ProviderName,
-		map[string]interface{}{},
+		extra...,
 	)
 }
 
 func ProviderConfigLocalhostWith(extra map[string]interface{}) string {
-	return at.CompileProviderConfig(
-		fields.ProviderName,
+	return ProviderConfigWith(
 		map[string]interface{}{
 			fields.ConfigAttrAddresses:             "http://127.0.0.1:9200",
 			fields.ConfigAttrInsecureSkipTLSVerify: true,

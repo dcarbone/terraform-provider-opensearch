@@ -4,6 +4,9 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"github.com/dcarbone/terraform-provider-opensearch/internal/client"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"time"
 
 	"github.com/dcarbone/terraform-plugin-framework-utils/v3/conv"
@@ -33,13 +36,18 @@ type OpenSearchProviderConfig struct {
 	EnableRetryOnTimeout types.Bool  `tfsdk:"enable_retry_on_timeout"`
 	MaxRetries           types.Int64 `tfsdk:"max_retries"`
 
-	CompressRequestBody types.Bool `tfsdk:"compress_request_body"`
-
+	CompressRequestBody   types.Bool `tfsdk:"compress_request_body"`
 	InsecureSkipTLSVerify types.Bool `tfsdk:"insecure_skip_tls_verify"`
+	UseResponseCheckOnly  types.Bool `tfsdk:"use_response_check_only"`
+	SkipInitProductCheck  types.Bool `tfsdk:"skip_init_product_check"`
 
-	UseResponseCheckOnly types.Bool `tfsdk:"use_response_check_only"`
+	Logging types.Object `tfsdk:"logging"`
+}
 
-	SkipInitProductCheck types.Bool `tfsdk:"skip_init_product_check"`
+type OpenSearchProviderConfigLogging struct {
+	Enabled             types.Bool `tfsdk:"enabled"`
+	IncludeRequestBody  types.Bool `tfsdk:"include_request_body"`
+	IncludeResponseBody types.Bool `tfsdk:"include_response_body"`
 }
 
 var _ provider.Provider = &OpenSearchProvider{}
@@ -112,16 +120,26 @@ func (p *OpenSearchProvider) Schema(_ context.Context, _ provider.SchemaRequest,
 				Description: "Skip product check API call on configure",
 				Optional:    true,
 			},
+			fields.ConfigAttrLogging: schema.ObjectAttribute{
+				Description: "OpenSearch client logging configuration",
+				Optional:    true,
+				AttributeTypes: map[string]attr.Type{
+					fields.ConfigAttrEnabled:             types.BoolType,
+					fields.ConfigAttrIncludeRequestBody:  types.BoolType,
+					fields.ConfigAttrIncludeResponseBody: types.BoolType,
+				},
+			},
 		},
 	}
 }
 
 func (p *OpenSearchProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
 	var (
-		conf OpenSearchProviderConfig
+		conf    OpenSearchProviderConfig
+		logConf = OpenSearchProviderConfigLogging{}
 
-		clientConfig opensearch.Config
-		client       *opensearch.Client
+		osConfig opensearch.Config
+		osClient *opensearch.Client
 
 		shared Shared
 
@@ -143,7 +161,7 @@ func (p *OpenSearchProvider) Configure(ctx context.Context, req provider.Configu
 	}
 
 	// build base opensearch client config
-	clientConfig = opensearch.Config{
+	osConfig = opensearch.Config{
 		Addresses:            conv.StringListToStrings(conf.Addresses),
 		Transport:            transport,
 		Username:             conf.Username.ValueString(),
@@ -158,7 +176,7 @@ func (p *OpenSearchProvider) Configure(ctx context.Context, req provider.Configu
 
 	// did they provide ca's?
 	if !conf.CACert.IsNull() && !conf.CACert.IsUnknown() {
-		clientConfig.CACert = []byte(conf.CACert.ValueString())
+		osConfig.CACert = []byte(conf.CACert.ValueString())
 	}
 
 	// if there were any errors during config, bail out now
@@ -171,7 +189,7 @@ func (p *OpenSearchProvider) Configure(ctx context.Context, req provider.Configu
 		infoReq := opensearchapi.InfoRequest{}
 		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
-		if _, err := infoReq.Do(ctx, client); err != nil {
+		if _, err := infoReq.Do(ctx, osClient); err != nil {
 			resp.Diagnostics.AddError(
 				"Error performing init compatibility check",
 				fmt.Sprintf("Error occurred during init compatibility check: %v", err),
@@ -180,9 +198,20 @@ func (p *OpenSearchProvider) Configure(ctx context.Context, req provider.Configu
 		}
 	}
 
+	// attempt to unmarshal logging config
+	if diags := conf.Logging.As(ctx, &logConf, basetypes.ObjectAsOptions{}); diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
+
+	// if client logging enabled, configure it
+	if logConf.Enabled.ValueBool() {
+		osConfig.Logger = client.NewTerraformLogger(ctx, logConf.IncludeRequestBody.ValueBool(), logConf.IncludeResponseBody.ValueBool())
+	}
+
 	// create shared object for use in resource and datasource types
 	shared = Shared{
-		Client: client,
+		Client: osClient,
 	}
 
 	// set shared
