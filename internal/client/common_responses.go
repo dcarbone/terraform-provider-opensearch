@@ -1,6 +1,7 @@
 package client
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/hashicorp/go-multierror"
@@ -63,7 +64,11 @@ func (e apiResponseEmbed) Error() string {
 	return e.TheError.Error()
 }
 
-func (e apiResponseEmbed) AddDiagnosticErrors(d diag.Diagnostics) {
+func (e apiResponseEmbed) populated() bool {
+	return e.TheError != nil || e.Message != "" || e.Status != ""
+}
+
+func (e apiResponseEmbed) AppendErrorsToDiagnostic(d diag.Diagnostics) {
 	if !e.HasErrors() {
 		return
 	}
@@ -73,4 +78,31 @@ func (e apiResponseEmbed) AddDiagnosticErrors(d diag.Diagnostics) {
 			source.Error(),
 		)
 	}
+}
+
+func tryUnmarshalEmbed(b []byte) (apiResponseEmbed, map[string]json.RawMessage, error) {
+	embed := apiResponseEmbed{}
+
+	m := make(map[string]json.RawMessage)
+	if err := json.Unmarshal(b, &m); err != nil {
+		return embed, m, err
+	}
+
+	if errs, ok := m["error"]; ok {
+		if err := json.Unmarshal(errs, embed.TheError); err != nil {
+			return embed, m, fmt.Errorf("error unmarshalling error: %w", err)
+		}
+	}
+	if status, ok := m["status"]; ok {
+		if err := json.Unmarshal(status, &embed.Status); err != nil {
+			return embed, m, fmt.Errorf("error unmarshalling status: %w", err)
+		}
+	}
+	if msg, ok := m["message"]; ok {
+		if err := json.Unmarshal(msg, &embed.Message); err != nil {
+			return embed, m, fmt.Errorf("error unmarshalling message: %w", err)
+		}
+	}
+
+	return embed, m, nil
 }

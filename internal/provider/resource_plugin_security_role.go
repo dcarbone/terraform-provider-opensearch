@@ -265,7 +265,7 @@ func (r *PluginSecurityRoleResource) Read(ctx context.Context, req resource.Read
 
 	// check for api errors
 	if osRoles.HasErrors() {
-		osRoles.AddDiagnosticErrors(resp.Diagnostics)
+		osRoles.AppendErrorsToDiagnostic(resp.Diagnostics)
 		return
 	}
 

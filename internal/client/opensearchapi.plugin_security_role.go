@@ -52,26 +52,27 @@ type PluginSecurityRoleList struct {
 }
 
 func (r *PluginSecurityRoleList) UnmarshalJSON(b []byte) error {
-	m := make(map[string]json.RawMessage)
-	if err := json.Unmarshal(b, &m); err != nil {
+	// try to unmarshal the embedded "common" response instance
+	embed, data, err := tryUnmarshalEmbed(b)
+	if err != nil {
 		return err
 	}
 
-	if v, ok := m["error"]; ok {
-		errs := apiResponseEmbed{}
-		if err := json.Unmarshal(v, &errs); err != nil {
-			return err
-		}
+	// if its populated, return only the parent model with the embed
+	if embed.populated() {
 		*r = PluginSecurityRoleList{
-			apiResponseEmbed: errs,
+			apiResponseEmbed: embed,
 		}
 		return nil
 	}
 
+	// otherwise, init with Roles map
 	*r = PluginSecurityRoleList{
 		Roles: make(map[string]PluginSecurityRole),
 	}
-	for k, v := range m {
+
+	// iterate over remaining data fields, unmarshalling them each into a role
+	for k, v := range data {
 		tmpRole := PluginSecurityRole{}
 		if err := json.Unmarshal(v, &tmpRole); err != nil {
 			return err
