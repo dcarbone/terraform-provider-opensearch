@@ -10,6 +10,7 @@ import (
 
 	"github.com/dcarbone/terraform-plugin-framework-utils/v3/conv"
 	"github.com/dcarbone/terraform-provider-opensearch/internal/client"
+	"github.com/dcarbone/terraform-provider-opensearch/internal/fields"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -60,70 +61,70 @@ func (d *PluginSecurityRoleResourceData) UpdateFromRole(roleName string, r clien
 }
 
 func (r *PluginSecurityRoleResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = makeResourceName(req.ProviderTypeName, resourceSuffixSecurityPluginRole)
+	resp.TypeName = fields.MakeResourceName(req.ProviderTypeName, fields.ResourceSuffixSecurityPluginRole)
 }
 
 func (r *PluginSecurityRoleResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "OpenSearch Security Plugin Role",
 		Attributes: map[string]schema.Attribute{
-			resourceAttrRoleName: schema.StringAttribute{
+			fields.ResourceAttrRoleName: schema.StringAttribute{
 				Required: true,
 			},
-			resourceAttrDescription: schema.StringAttribute{
+			fields.ResourceAttrDescription: schema.StringAttribute{
 				Optional: true,
 			},
-			resourceAttrClusterPermissions: schema.ListAttribute{
+			fields.ResourceAttrClusterPermissions: schema.ListAttribute{
 				Optional:    true,
 				ElementType: types.StringType,
 			},
-			resourceAttrIndexPermissions: schema.ListNestedAttribute{
+			fields.ResourceAttrIndexPermissions: schema.ListNestedAttribute{
 				Optional: true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
-						resourceAttrIndexPatterns: schema.ListAttribute{
+						fields.ResourceAttrIndexPatterns: schema.ListAttribute{
 							Optional:    true,
 							ElementType: types.StringType,
 						},
-						resourceAttrDLS: schema.StringAttribute{
+						fields.ResourceAttrDLS: schema.StringAttribute{
 							Optional: true,
 						},
-						resourceAttrFLS: schema.StringAttribute{
+						fields.ResourceAttrFLS: schema.StringAttribute{
 							Optional: true,
 						},
-						resourceAttrMaskedFields: schema.ListAttribute{
+						fields.ResourceAttrMaskedFields: schema.ListAttribute{
 							Optional:    true,
 							ElementType: types.StringType,
 						},
-						resourceAttrAllowedActions: schema.ListAttribute{
+						fields.ResourceAttrAllowedActions: schema.ListAttribute{
 							Optional:    true,
 							ElementType: types.StringType,
 						},
 					},
 				},
 			},
-			resourceAttrTenantPermissions: schema.ListNestedAttribute{
+			fields.ResourceAttrTenantPermissions: schema.ListNestedAttribute{
 				Optional: true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
-						resourceAttrTenantPatterns: schema.ListAttribute{
+						fields.ResourceAttrTenantPatterns: schema.ListAttribute{
 							Optional:    true,
 							ElementType: types.StringType,
 						},
-						resourceAttrAllowedActions: schema.ListAttribute{
+						fields.ResourceAttrAllowedActions: schema.ListAttribute{
 							Optional:    true,
 							ElementType: types.StringType,
 						},
 					},
 				},
 			},
-			resourceAttrStatic: schema.BoolAttribute{
+			fields.ResourceAttrStatic: schema.BoolAttribute{
 				Computed: true,
 			},
-			resourceAttrHidden: schema.BoolAttribute{
+			fields.ResourceAttrHidden: schema.BoolAttribute{
 				Computed: true,
 			},
-			resourceAttrReserved: schema.BoolAttribute{
+			fields.ResourceAttrReserved: schema.BoolAttribute{
 				Computed: true,
 			},
 		},

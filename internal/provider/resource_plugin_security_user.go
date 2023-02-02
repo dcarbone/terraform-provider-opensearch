@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"github.com/dcarbone/terraform-provider-opensearch/internal/fields"
 
 	"github.com/dcarbone/terraform-plugin-framework-utils/v3/validation"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -41,7 +42,7 @@ type PluginSecurityUserResourceData struct {
 }
 
 func (r *PluginSecurityUserResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = makeResourceName(req.ProviderTypeName, resourceSuffixSecurityPluginUser)
+	resp.TypeName = fields.MakeResourceName(req.ProviderTypeName, fields.ResourceSuffixSecurityPluginUser)
 }
 
 func (r *PluginSecurityUserResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
@@ -50,14 +51,14 @@ func (r *PluginSecurityUserResource) Schema(_ context.Context, _ resource.Schema
 		Description: "OpenSearch Security Plugin User",
 
 		Attributes: map[string]schema.Attribute{
-			resourceAttrUsername: schema.StringAttribute{
+			fields.ResourceAttrUsername: schema.StringAttribute{
 				Description: "Username",
 				Required:    true,
 				Validators: []validator.String{
 					validation.Required(),
 				},
 			},
-			resourceAttrPassword: schema.StringAttribute{
+			fields.ResourceAttrPassword: schema.StringAttribute{
 				Description: "User password",
 				Required:    true,
 				Sensitive:   true,
@@ -65,23 +66,23 @@ func (r *PluginSecurityUserResource) Schema(_ context.Context, _ resource.Schema
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
-			resourceAttrHash: schema.StringAttribute{
+			fields.ResourceAttrHash: schema.StringAttribute{
 				Computed: true,
 			},
-			resourceAttrRoles: schema.ListAttribute{
+			fields.ResourceAttrRoles: schema.ListAttribute{
 				Computed:    true,
 				ElementType: types.StringType,
 			},
-			resourceAttrAttributes: schema.MapAttribute{
+			fields.ResourceAttrAttributes: schema.MapAttribute{
 				Optional: true,
 			},
-			resourceAttrBackendRoles: schema.ListAttribute{
+			fields.ResourceAttrBackendRoles: schema.ListAttribute{
 				Optional: true,
 				PlanModifiers: []planmodifier.List{
 					listplanmodifier.UseStateForUnknown(),
 				},
 			},
-			resourceAttrOpenDistroSecurityRoles: schema.ListAttribute{
+			fields.ResourceAttrOpenDistroSecurityRoles: schema.ListAttribute{
 				Optional: true,
 				PlanModifiers: []planmodifier.List{
 					listplanmodifier.UseStateForUnknown(),

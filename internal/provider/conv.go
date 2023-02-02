@@ -3,6 +3,7 @@ package provider
 import (
 	"github.com/dcarbone/terraform-plugin-framework-utils/v3/conv"
 	"github.com/dcarbone/terraform-provider-opensearch/internal/client"
+	"github.com/dcarbone/terraform-provider-opensearch/internal/fields"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -14,16 +15,16 @@ type (
 
 var (
 	indexPermissionAttrTypeMap = attrTypeMap{
-		resourceAttrIndexPatterns:  types.ListType{ElemType: types.StringType},
-		resourceAttrDLS:            types.StringType,
-		resourceAttrFLS:            types.StringType,
-		resourceAttrMaskedFields:   types.ListType{ElemType: types.StringType},
-		resourceAttrAllowedActions: types.ListType{ElemType: types.StringType},
+		fields.ResourceAttrIndexPatterns:  types.ListType{ElemType: types.StringType},
+		fields.ResourceAttrDLS:            types.StringType,
+		fields.ResourceAttrFLS:            types.StringType,
+		fields.ResourceAttrMaskedFields:   types.ListType{ElemType: types.StringType},
+		fields.ResourceAttrAllowedActions: types.ListType{ElemType: types.StringType},
 	}
 
 	tenantPermissionAttrTypeMap = attrTypeMap{
-		resourceAttrTenantPatterns: types.ListType{ElemType: types.StringType},
-		resourceAttrAllowedActions: types.ListType{ElemType: types.StringType},
+		fields.ResourceAttrTenantPatterns: types.ListType{ElemType: types.StringType},
+		fields.ResourceAttrAllowedActions: types.ListType{ElemType: types.StringType},
 	}
 )
 
@@ -51,11 +52,11 @@ func indexPermissionToTerraformObject(p client.PluginSecurityRoleIndexPermission
 	return types.ObjectValue(
 		indexPermissionAttrTypeMap,
 		map[string]attr.Value{
-			resourceAttrIndexPatterns:  conv.StringsToStringList(p.IndexPatterns, false),
-			resourceAttrDLS:            types.StringValue(p.DLS),
-			resourceAttrFLS:            types.StringValue(p.FLS),
-			resourceAttrMaskedFields:   conv.StringsToStringList(p.MaskedFields, false),
-			resourceAttrAllowedActions: conv.StringsToStringList(p.AllowedActions, false),
+			fields.ResourceAttrIndexPatterns:  conv.StringsToStringList(p.IndexPatterns, false),
+			fields.ResourceAttrDLS:            types.StringValue(p.DLS),
+			fields.ResourceAttrFLS:            types.StringValue(p.FLS),
+			fields.ResourceAttrMaskedFields:   conv.StringsToStringList(p.MaskedFields, false),
+			fields.ResourceAttrAllowedActions: conv.StringsToStringList(p.AllowedActions, false),
 		},
 	)
 }
@@ -68,8 +69,8 @@ func tenantPermissionToTerraformObject(p client.PluginSecurityRoleTenantPermissi
 	return types.ObjectValue(
 		tenantPermissionAttrTypeMap,
 		map[string]attr.Value{
-			resourceAttrTenantPatterns: conv.StringsToStringList(p.TenantPatterns, false),
-			resourceAttrAllowedActions: conv.StringsToStringList(p.AllowedActions, false),
+			fields.ResourceAttrTenantPatterns: conv.StringsToStringList(p.TenantPatterns, false),
+			fields.ResourceAttrAllowedActions: conv.StringsToStringList(p.AllowedActions, false),
 		},
 	)
 }
@@ -107,19 +108,19 @@ func mapTerraformIndexPermissionToIndexPermissionType(attrs map[string]attr.Valu
 	out := client.PluginSecurityRoleIndexPermission{}
 
 	// populate
-	if v, ok := attrs[resourceAttrIndexPatterns]; ok {
+	if v, ok := attrs[fields.ResourceAttrIndexPatterns]; ok {
 		out.IndexPatterns = conv.StringListToStrings(v)
 	}
-	if v, ok := attrs[resourceAttrDLS]; ok {
+	if v, ok := attrs[fields.ResourceAttrDLS]; ok {
 		out.DLS = v.(types.String).ValueString()
 	}
-	if v, ok := attrs[resourceAttrFLS]; ok {
+	if v, ok := attrs[fields.ResourceAttrFLS]; ok {
 		out.FLS = v.(types.String).ValueString()
 	}
-	if v, ok := attrs[resourceAttrMaskedFields]; ok {
+	if v, ok := attrs[fields.ResourceAttrMaskedFields]; ok {
 		out.MaskedFields = conv.StringListToStrings(v)
 	}
-	if v, ok := attrs[resourceAttrAllowedActions]; ok {
+	if v, ok := attrs[fields.ResourceAttrAllowedActions]; ok {
 		out.AllowedActions = conv.StringListToStrings(v)
 	}
 
@@ -131,10 +132,10 @@ func mapTerraformTenantPermissionsToTenantPermissionsType(attrs map[string]attr.
 	// create instance
 	out := client.PluginSecurityRoleTenantPermission{}
 
-	if v, ok := attrs[resourceAttrTenantPatterns]; ok {
+	if v, ok := attrs[fields.ResourceAttrTenantPatterns]; ok {
 		out.TenantPatterns = conv.StringListToStrings(v)
 	}
-	if v, ok := attrs[resourceAttrAllowedActions]; ok {
+	if v, ok := attrs[fields.ResourceAttrAllowedActions]; ok {
 		out.AllowedActions = conv.StringListToStrings(v)
 	}
 
