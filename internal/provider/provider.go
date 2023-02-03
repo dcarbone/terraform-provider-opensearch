@@ -4,26 +4,30 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"github.com/dcarbone/terraform-provider-opensearch/internal/client"
-	"github.com/hashicorp/terraform-plugin-framework/attr"
-	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"time"
 
 	"github.com/dcarbone/terraform-plugin-framework-utils/v3/conv"
 	"github.com/dcarbone/terraform-plugin-framework-utils/v3/validation"
+	"github.com/dcarbone/terraform-provider-opensearch/internal/client"
 	"github.com/dcarbone/terraform-provider-opensearch/internal/fields"
 	"github.com/hashicorp/go-cleanhttp"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/opensearch-project/opensearch-go"
 	"github.com/opensearch-project/opensearch-go/opensearchapi"
 )
 
-type OpenSearchProviderConfigLogging struct {
+type OpenSearchProviderConfigClientDebugLogger struct {
+	Enabled types.Bool `tfsdk:"enabled"`
+}
+
+type OpenSearchProviderConfigRequestTraceLogger struct {
 	Enabled             types.Bool `tfsdk:"enabled"`
 	IncludeRequestBody  types.Bool `tfsdk:"include_request_body"`
 	IncludeResponseBody types.Bool `tfsdk:"include_response_body"`
@@ -44,10 +48,11 @@ type OpenSearchProviderConfig struct {
 
 	CompressRequestBody   types.Bool `tfsdk:"compress_request_body"`
 	InsecureSkipTLSVerify types.Bool `tfsdk:"insecure_skip_tls_verify"`
-	UseResponseCheckOnly  types.Bool `tfsdk:"use_response_check_only"`
+	EnableOnRequestCheck  types.Bool `tfsdk:"enable_on_request_check"`
 	SkipInitProductCheck  types.Bool `tfsdk:"skip_init_product_check"`
 
-	Logging types.Object `tfsdk:"logging"`
+	ClientDebugLogger  types.Object `tfsdk:"client_debug_logger"`
+	RequestTraceLogger types.Object `tfsdk:"request_trace_logger"`
 }
 
 var _ provider.Provider = &OpenSearchProvider{}
@@ -112,17 +117,29 @@ func (p *OpenSearchProvider) Schema(_ context.Context, _ provider.SchemaRequest,
 				Description: "Disable TLS verification",
 				Optional:    true,
 			},
-			fields.ConfigAttrUseResponseCheckOnly: schema.BoolAttribute{
-				Description: "Disable executing product check on every request",
-				Optional:    true,
+			fields.ConfigAttrEnableOnRequestCheck: schema.BoolAttribute{
+				Description: "By default, the opensearch-go client executes a \"compatibility check\" on every" +
+					" single request made.  This has been disabled by default in this provider.  If you wish to" +
+					" re-enable this, for whatever reason, set this to true.",
+				Optional: true,
 			},
 			fields.ConfigAttrSkipInitProductCheck: schema.BoolAttribute{
 				Description: "Skip product check API call on configure",
 				Optional:    true,
 			},
-			fields.ConfigAttrLogging: schema.ObjectAttribute{
-				Description: "OpenSearch client logging configuration",
-				Optional:    true,
+			fields.ConfigAttrClientDebugLogger: schema.ObjectAttribute{
+				Description: "OpenSearch client debug logging configuration.  This writes debug-level logging" +
+					" directly to stdout.  Do not enable outside of a local development environment.",
+				Optional: true,
+				AttributeTypes: map[string]attr.Type{
+					fields.ConfigAttrEnabled: types.BoolType,
+				},
+			},
+			fields.ConfigAttrRequestTraceLogger: schema.ObjectAttribute{
+				Description: "OpenSearch client request tracing logger configuration.  This writes TRACE level" +
+					" Terraform logs of every HTTP action by the opensearch-go client.  Can produce very chatty" +
+					" logs.",
+				Optional: true,
 				AttributeTypes: map[string]attr.Type{
 					fields.ConfigAttrEnabled:             types.BoolType,
 					fields.ConfigAttrIncludeRequestBody:  types.BoolType,
@@ -135,12 +152,13 @@ func (p *OpenSearchProvider) Schema(_ context.Context, _ provider.SchemaRequest,
 
 func (p *OpenSearchProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
 	var (
-		conf     OpenSearchProviderConfig
-		logConf  OpenSearchProviderConfigLogging
-		osConfig opensearch.Config
-		osClient *opensearch.Client
-		shared   Shared
-		err      error
+		conf         OpenSearchProviderConfig
+		traceLogConf OpenSearchProviderConfigRequestTraceLogger
+		dbgLogConf   OpenSearchProviderConfigClientDebugLogger
+		osConfig     opensearch.Config
+		osClient     *opensearch.Client
+		shared       Shared
+		err          error
 
 		// create pooled transport
 		transport = cleanhttp.DefaultPooledTransport()
@@ -170,7 +188,7 @@ func (p *OpenSearchProvider) Configure(ctx context.Context, req provider.Configu
 		EnableRetryOnTimeout: conf.EnableRetryOnTimeout.ValueBool(),
 		MaxRetries:           conv.Int64ValueToInt(conf.MaxRetries),
 		CompressRequestBody:  conf.CompressRequestBody.ValueBool(),
-		UseResponseCheckOnly: conf.UseResponseCheckOnly.ValueBool(),
+		UseResponseCheckOnly: !conf.EnableOnRequestCheck.ValueBool(),
 	}
 
 	// did they provide ca's?
@@ -178,15 +196,23 @@ func (p *OpenSearchProvider) Configure(ctx context.Context, req provider.Configu
 		osConfig.CACert = []byte(conf.CACert.ValueString())
 	}
 
-	// attempt to unmarshal logging config
-	if diags := conf.Logging.As(ctx, &logConf, basetypes.ObjectAsOptions{UnhandledNullAsEmpty: true, UnhandledUnknownAsEmpty: true}); diags.HasError() {
-		resp.Diagnostics.Append(diags...)
+	// attempt to unmarshal request trace logging config
+	resp.Diagnostics.Append(conf.RequestTraceLogger.As(ctx, &traceLogConf, basetypes.ObjectAsOptions{UnhandledNullAsEmpty: true, UnhandledUnknownAsEmpty: true})...)
+	// attempt to unmarshal client debug logging config
+	resp.Diagnostics.Append(conf.ClientDebugLogger.As(ctx, &dbgLogConf, basetypes.ObjectAsOptions{UnhandledNullAsEmpty: true, UnhandledUnknownAsEmpty: true})...)
+
+	// check for error(s)
+	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// if client logging enabled, configure it
-	if logConf.Enabled.ValueBool() {
-		osConfig.Logger = client.NewTerraformLogger(ctx, logConf.IncludeRequestBody.ValueBool(), logConf.IncludeResponseBody.ValueBool())
+	// if request trace logging enabled, configure it
+	if traceLogConf.Enabled.ValueBool() {
+		osConfig.Logger = client.NewTerraformLogger(ctx, traceLogConf.IncludeRequestBody.ValueBool(), traceLogConf.IncludeResponseBody.ValueBool())
+	}
+	// if client debug logging enabled, configure it
+	if dbgLogConf.Enabled.ValueBool() {
+		osConfig.EnableDebugLogger = true
 	}
 
 	if osClient, err = opensearch.NewClient(osConfig); err != nil {

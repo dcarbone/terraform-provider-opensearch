@@ -1,9 +1,11 @@
 package acctest
 
 import (
+	"os"
+	"strings"
+
 	at "github.com/dcarbone/terraform-plugin-framework-utils/v3/acctest"
 	"github.com/dcarbone/terraform-provider-opensearch/internal/fields"
-	"strings"
 )
 
 func CombineConfig(in ...string) string {
@@ -25,9 +27,9 @@ func ProviderConfigLocalhostWith(extra ...map[string]interface{}) string {
 
 					fields.ConfigAttrAddresses:             []string{"https://127.0.0.1:9200"},
 					fields.ConfigAttrInsecureSkipTLSVerify: true,
-					fields.ConfigAttrUsername:              "admin",
-					fields.ConfigAttrPassword:              "admin",
-					fields.ConfigAttrLogging: map[string]interface{}{
+					fields.ConfigAttrUsername:              os.Getenv("OPENSEARCH_USERNAME"),
+					fields.ConfigAttrPassword:              os.Getenv("OPENSEARCH_PASSWORD"),
+					fields.ConfigAttrRequestTraceLogger: map[string]interface{}{
 						fields.ConfigAttrEnabled:             true,
 						fields.ConfigAttrIncludeRequestBody:  true,
 						fields.ConfigAttrIncludeResponseBody: true,

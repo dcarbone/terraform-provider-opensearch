@@ -3,8 +3,11 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/opensearch-project/opensearch-go/opensearchapi"
 )
@@ -49,6 +52,14 @@ func codeMatch(actual int, targets []int) bool {
 	return false
 }
 
+func codesToString(in []int) []string {
+	out := make([]string, len(in))
+	for i, n := range in {
+		out[i] = strconv.Itoa(n)
+	}
+	return out
+}
+
 func ParseResponse(osResp *opensearchapi.Response, sink interface{}, okCodes ...int) error {
 	// immediately queue up body closure handling
 	defer HandleResponseCleanup(osResp)
@@ -73,10 +84,10 @@ func ParseResponse(osResp *opensearchapi.Response, sink interface{}, okCodes ...
 	}
 
 	// otherwise, attempt to unmarshal response into meta
-	meta := APIStatusResponse{}
+	meta := new(APIStatusResponse)
 
 	// attempt to decode response
-	if err := json.NewDecoder(osResp.Body).Decode(&meta); err != nil {
+	if err := json.NewDecoder(osResp.Body).Decode(meta); err != nil {
 		return err
 	}
 
@@ -86,6 +97,16 @@ func ParseResponse(osResp *opensearchapi.Response, sink interface{}, okCodes ...
 		meta.WarningsHeader = make([]string, len(w))
 		copy(meta.WarningsHeader, w)
 	}
+
+	// ensure we append the status code mismatch
+	if meta.APIError == nil {
+		meta.APIError = new(APIStatusResponseError)
+	}
+
+	meta.APIError.RootCause = append(meta.APIError.RootCause, APIStatusResponseErrorRootCause{
+		Type:   "Status Code Mismatch",
+		Reason: fmt.Sprintf("Actual response code %d does not match expected [%s]", osResp.StatusCode, strings.Join(codesToString(okCodes), " ")),
+	})
 
 	// return whatever we got here.
 	return meta

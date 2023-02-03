@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
@@ -29,6 +30,8 @@ type PluginSecurityRoleResource struct {
 }
 
 type PluginSecurityRoleResourceData struct {
+	ID types.String `tfsdk:"id"`
+
 	RoleName           types.String `tfsdk:"role_name"`
 	Description        types.String `tfsdk:"description"`
 	ClusterPermissions types.List   `tfsdk:"cluster_permissions"`
@@ -44,6 +47,10 @@ func (d *PluginSecurityRoleResourceData) UpdateFromRole(roleName string, r clien
 	var diags diag.Diagnostics
 
 	d.RoleName = types.StringValue(roleName)
+
+	// set id to role name so framework is happy
+	d.ID = d.RoleName
+
 	d.Description = types.StringValue(r.Description)
 	d.ClusterPermissions = conv.StringsToStringList(r.ClusterPermissions, true)
 
@@ -70,6 +77,10 @@ func (r *PluginSecurityRoleResource) Schema(_ context.Context, _ resource.Schema
 	resp.Schema = schema.Schema{
 		Description: "OpenSearch Security Plugin Role",
 		Attributes: map[string]schema.Attribute{
+			fields.ResourceAttrID: schema.StringAttribute{
+				Computed: true,
+			},
+
 			fields.ResourceAttrRoleName: schema.StringAttribute{
 				Required: true,
 				Validators: []validator.String{
@@ -78,6 +89,10 @@ func (r *PluginSecurityRoleResource) Schema(_ context.Context, _ resource.Schema
 			},
 			fields.ResourceAttrDescription: schema.StringAttribute{
 				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.String{
+					defaultValuedStringPlanModifier(""),
+				},
 			},
 			fields.ResourceAttrClusterPermissions: schema.ListAttribute{
 				Optional:    true,
@@ -85,6 +100,7 @@ func (r *PluginSecurityRoleResource) Schema(_ context.Context, _ resource.Schema
 			},
 			fields.ResourceAttrIndexPermissions: schema.ListNestedAttribute{
 				Optional: true,
+				Computed: true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						fields.ResourceAttrIndexPatterns: schema.ListAttribute{
@@ -107,9 +123,13 @@ func (r *PluginSecurityRoleResource) Schema(_ context.Context, _ resource.Schema
 						},
 					},
 				},
+				PlanModifiers: []planmodifier.List{
+					new(pluginSecurityRoleIndexSettingsDefaultValue),
+				},
 			},
 			fields.ResourceAttrTenantPermissions: schema.ListNestedAttribute{
 				Optional: true,
+				Computed: true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						fields.ResourceAttrTenantPatterns: schema.ListAttribute{
@@ -121,6 +141,9 @@ func (r *PluginSecurityRoleResource) Schema(_ context.Context, _ resource.Schema
 							ElementType: types.StringType,
 						},
 					},
+				},
+				PlanModifiers: []planmodifier.List{
+					new(pluginSecurityRoleTenantPermissionsDefaultValue),
 				},
 			},
 			fields.ResourceAttrStatic: schema.BoolAttribute{
@@ -140,6 +163,7 @@ func (r *PluginSecurityRoleResource) Create(ctx context.Context, req resource.Cr
 	var (
 		roleName string
 		osRole   client.PluginSecurityRole
+		ok       bool
 		err      error
 
 		planData = new(PluginSecurityRoleResourceData)
@@ -218,8 +242,11 @@ func (r *PluginSecurityRoleResource) Create(ctx context.Context, req resource.Cr
 			return
 		}
 
+		// create response container
+		createResp := client.APIStatusResponse{}
+
 		// attempt to parse response
-		if err = client.ParseResponse(osResp, &osRole, http.StatusOK); err != nil {
+		if err = client.ParseResponse(osResp, &createResp, http.StatusCreated); err != nil {
 			if m, ok := err.(client.APIStatusResponse); ok {
 				m.AppendDiagnostics(resp.Diagnostics)
 			} else {
@@ -230,6 +257,43 @@ func (r *PluginSecurityRoleResource) Create(ctx context.Context, req resource.Cr
 			}
 			return
 		}
+
+		// check for errors
+		if createResp.HasErrors() {
+			createResp.AppendDiagnostics(resp.Diagnostics)
+			return
+		}
+
+		// check for warnings
+		if len(createResp.WarningsHeader) > 0 {
+			for _, w := range createResp.WarningsHeader {
+				resp.Diagnostics.AddWarning(
+					w,
+					fmt.Sprintf("Warning received after creating role %q: %v", roleName, w),
+				)
+			}
+		}
+	}
+
+	// attempt to fetch newly created role
+	{
+		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		_, osRoles, err := tryFetchRoles(ctx, r.client, roleName)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Error fetching newly created role",
+				fmt.Sprintf("Error fetching newly created role %q: %v", roleName, err.Error()),
+			)
+			return
+		}
+		if osRole, ok = osRoles[roleName]; !ok {
+			resp.Diagnostics.AddError(
+				"Role not found",
+				fmt.Sprintf("Unable to locate newly created role %q", roleName),
+			)
+			return
+		}
 	}
 
 	// otherwise, try to update state model with new data
@@ -238,8 +302,10 @@ func (r *PluginSecurityRoleResource) Create(ctx context.Context, req resource.Cr
 		return
 	}
 
+	fmt.Println(osRole)
+
 	// finally, try to update state itself with updated model
-	resp.Diagnostics.Append(resp.State.Set(ctx, planData)...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &planData)...)
 }
 
 func (r *PluginSecurityRoleResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {

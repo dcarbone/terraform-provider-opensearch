@@ -52,10 +52,14 @@ func (tl TerraformLogger) LogRoundTrip(req *http.Request, resp *http.Response, e
 		}
 	}
 
-	if tl.respBodyEnabled && resp != nil && resp.Body != nil {
-		respBodyBytes, _ := io.ReadAll(resp.Body)
-		logFields["response_body"] = string(respBodyBytes)
-		logFields["response_body_len"] = len(respBodyBytes)
+	if resp != nil {
+		logFields["response_code"] = resp.StatusCode
+		logFields["response_status"] = resp.Status
+		if tl.respBodyEnabled && resp.Body != nil {
+			respBodyBytes, _ := io.ReadAll(resp.Body)
+			logFields["response_body"] = string(respBodyBytes)
+			logFields["response_body_len"] = len(respBodyBytes)
+		}
 	}
 
 	if err != nil {

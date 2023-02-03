@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"os"
 	"regexp"
 	"testing"
 
@@ -34,6 +35,12 @@ func TestAcc_PluginSecurityRole(t *testing.T) {
 	})
 
 	t.Run("basic", func(t *testing.T) {
+		if os.Getenv("OPENSEARCH_USERNAME") == "" {
+			t.Setenv("OPENSEARCH_USERNAME", "admin")
+		}
+		if os.Getenv("OPENSEARCH_PASSWORD") == "" {
+			t.Setenv("OPENSEARCH_PASSWORD", "admin")
+		}
 		resource.Test(t, resource.TestCase{
 			ProtoV6ProviderFactories: protoV6ProviderFactories,
 			Steps: []resource.TestStep{
