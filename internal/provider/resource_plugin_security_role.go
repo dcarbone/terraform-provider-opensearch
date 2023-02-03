@@ -302,8 +302,6 @@ func (r *PluginSecurityRoleResource) Create(ctx context.Context, req resource.Cr
 		return
 	}
 
-	fmt.Println(osRole)
-
 	// finally, try to update state itself with updated model
 	resp.Diagnostics.Append(resp.State.Set(ctx, &planData)...)
 }
