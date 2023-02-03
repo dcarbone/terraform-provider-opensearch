@@ -25,20 +25,29 @@ provider "opensearch" {
 
 - `addresses` (List of String) List of addresses to connect to
 - `ca_cert` (String, Sensitive) PEM Encoded certificate authorities
+- `client_debug_logger` (Object) OpenSearch client debug logging configuration.  This writes debug-level logging directly to stdout.  Do not enable outside of a local development environment. (see [below for nested schema](#nestedatt--client_debug_logger))
 - `compress_request_body` (Boolean) Enable request body compression
 - `disable_retry` (Boolean) Disable all request retries
+- `enable_on_request_check` (Boolean) By default, the opensearch-go client executes a "compatibility check" on every single request made.  This has been disabled by default in this provider.  If you wish to re-enable this, for whatever reason, set this to true.
 - `enable_retry_on_timeout` (Boolean) Enables request retry on timeout
 - `insecure_skip_tls_verify` (Boolean) Disable TLS verification
-- `logging` (Object) OpenSearch client logging configuration (see [below for nested schema](#nestedatt--logging))
 - `max_retries` (Number) Maximum number of times a given request can be retried
 - `password` (String, Sensitive) Password for HTTP basic authentication
-- `retry_on_statuses` (List of Number) List of status codes for retry
+- `request_trace_logger` (Object) OpenSearch client request tracing logger configuration.  This writes TRACE level Terraform logs of every HTTP action by the opensearch-go client.  Can produce very chatty logs. (see [below for nested schema](#nestedatt--request_trace_logger))
+- `retry_on_status` (List of Number) List of status codes for retry
 - `skip_init_product_check` (Boolean) Skip product check API call on configure
-- `use_response_check_only` (Boolean) Disable executing product check on every request
 - `username` (String) Username for HTTP basic authentication
 
-<a id="nestedatt--logging"></a>
-### Nested Schema for `logging`
+<a id="nestedatt--client_debug_logger"></a>
+### Nested Schema for `client_debug_logger`
+
+Optional:
+
+- `enabled` (Boolean)
+
+
+<a id="nestedatt--request_trace_logger"></a>
+### Nested Schema for `request_trace_logger`
 
 Optional:
 

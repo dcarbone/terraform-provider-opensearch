@@ -29,6 +29,7 @@ OpenSearch Security Plugin Role
 ### Read-Only
 
 - `hidden` (Boolean)
+- `id` (String) The ID of this resource.
 - `reserved` (Boolean)
 - `static` (Boolean)
 
