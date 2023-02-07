@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"fmt"
 	"os"
 	"regexp"
 	"testing"
@@ -21,7 +22,7 @@ func TestAcc_PluginSecurityRole(t *testing.T) {
 
 	t.Run("empty-throws-error", func(t *testing.T) {
 		resource.Test(t, resource.TestCase{
-			ProtoV6ProviderFactories: protoV6ProviderFactories,
+			ProtoV6ProviderFactories: providerFactories,
 			Steps: []resource.TestStep{ // Create and Read testing
 				{
 					Config: acctest.CombineConfig(
@@ -42,7 +43,7 @@ func TestAcc_PluginSecurityRole(t *testing.T) {
 			t.Setenv("OPENSEARCH_PASSWORD", "admin")
 		}
 		resource.Test(t, resource.TestCase{
-			ProtoV6ProviderFactories: protoV6ProviderFactories,
+			ProtoV6ProviderFactories: providerFactories,
 			Steps: []resource.TestStep{
 				{
 					Config: acctest.CombineConfig(
@@ -57,37 +58,79 @@ func TestAcc_PluginSecurityRole(t *testing.T) {
 		})
 	})
 
-	//resource.Test(t, resource.TestCase{
-	//	PreCheck:                 func() { testAccPreCheck(t) },
-	//	ProtoV6ProviderFactories: protoV6ProviderFactories,
-	//	Steps: []resource.TestStep{
-	//		// Create and Read testing
-	//		{
-	//			Config: acctest.PluginSecurityRoleConfigWith(resourceName, nil),
-	//			Check: resource.ComposeAggregateTestCheckFunc(
-	//				resource.TestCheckResourceAttr("scaffolding_example.test", "configurable_attribute", "one"),
-	//				resource.TestCheckResourceAttr("scaffolding_example.test", "id", "example-id"),
-	//			),
-	//		},
-	//		// ImportState testing
-	//		{
-	//			ResourceName:      "scaffolding_example.test",
-	//			ImportState:       true,
-	//			ImportStateVerify: true,
-	//			// This is not normally necessary, but is here because this
-	//			// example code does not have an actual upstream service.
-	//			// Once the Read method is able to refresh information from
-	//			// the upstream service, this can be removed.
-	//			ImportStateVerifyIgnore: []string{"configurable_attribute"},
-	//		},
-	//		// Update and Read testing
-	//		{
-	//			Config: testAccExampleResourceConfig("two"),
-	//			Check: resource.ComposeAggregateTestCheckFunc(
-	//				resource.TestCheckResourceAttr("scaffolding_example.test", "configurable_attribute", "two"),
-	//			),
-	//		},
-	//		// Delete testing automatically occurs in TestCase
-	//	},
-	//})
+	t.Run("nested-attributes", func(t *testing.T) {
+		const (
+			backendRole1 = "backend_role_1"
+			backendRole2 = "backend_role_2"
+
+			indexPattern1 = "index_pattern_1*"
+			indexPattern2 = "index_*_2"
+
+			dlsValue = "dls_value"
+			flsValue = "fls_value"
+
+			maskedField1 = "masked_field_1"
+			maskedField2 = "masked_field_2"
+
+			allowedAction1 = "indices:admin/create"
+			allowedAction2 = "indices:read*"
+		)
+
+		if os.Getenv("OPENSEARCH_USERNAME") == "" {
+			t.Setenv("OPENSEARCH_USERNAME", "admin")
+		}
+		if os.Getenv("OPENSEARCH_PASSWORD") == "" {
+			t.Setenv("OPENSEARCH_PASSWORD", "admin")
+		}
+		resource.Test(t, resource.TestCase{
+			ProtoV6ProviderFactories: providerFactories,
+			Steps: []resource.TestStep{
+				{
+					Config: acctest.CombineConfig(
+						acctest.ProviderConfigLocalhostWith(),
+						acctest.PluginSecurityRoleValidConfigWith(
+							resourceName,
+							map[string]interface{}{
+								fields.ResourceAttrBackendRoles: []string{
+									backendRole1,
+									backendRole2,
+								},
+								fields.ResourceAttrIndexPermissions: []map[string]interface{}{
+									{
+										fields.ResourceAttrIndexPatterns: []string{
+											indexPattern1,
+											indexPattern2,
+										},
+										fields.ResourceAttrDLS: dlsValue,
+										fields.ResourceAttrFLS: flsValue,
+										fields.ResourceAttrMaskedFields: []string{
+											maskedField1,
+											maskedField2,
+										},
+										fields.ResourceAttrAllowedActions: []string{
+											allowedAction1,
+											allowedAction2,
+										},
+									},
+								},
+							},
+						),
+					),
+					Check: resource.ComposeAggregateTestCheckFunc(
+						resource.TestCheckResourceAttr(resourceFQN, fields.ResourceAttrRoleName, resourceName),
+						resource.TestCheckResourceAttr(
+							resourceFQN,
+							fmt.Sprintf("%s.0", fields.ResourceAttrBackendRoles),
+							backendRole1,
+						),
+						resource.TestCheckResourceAttr(
+							resourceFQN,
+							fmt.Sprintf("%s.1", fields.ResourceAttrBackendRoles),
+							backendRole2,
+						),
+					),
+				},
+			},
+		})
+	})
 }

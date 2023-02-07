@@ -2,9 +2,9 @@ package provider
 
 import (
 	"context"
-	"github.com/dcarbone/terraform-provider-opensearch/internal/fields"
 
 	"github.com/dcarbone/terraform-plugin-framework-utils/v3/validation"
+	"github.com/dcarbone/terraform-provider-opensearch/internal/fields"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
