@@ -1,7 +1,6 @@
 package client
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -126,31 +125,4 @@ func (e APIStatusResponse) AppendDiagnostics(d diag.Diagnostics) {
 			)
 		}
 	}
-}
-
-func TryUnmarshalEmbed(b []byte) (APIStatusResponse, map[string]json.RawMessage, error) {
-	embed := APIStatusResponse{}
-
-	m := make(map[string]json.RawMessage)
-	if err := json.Unmarshal(b, &m); err != nil {
-		return embed, m, err
-	}
-
-	if errs, ok := m["error"]; ok {
-		if err := json.Unmarshal(errs, embed.APIError); err != nil {
-			return embed, m, fmt.Errorf("error unmarshalling error: %w", err)
-		}
-	}
-	if status, ok := m["status"]; ok {
-		if err := json.Unmarshal(status, &embed.Status); err != nil {
-			return embed, m, fmt.Errorf("error unmarshalling status: %w", err)
-		}
-	}
-	if msg, ok := m["message"]; ok {
-		if err := json.Unmarshal(msg, &embed.Message); err != nil {
-			return embed, m, fmt.Errorf("error unmarshalling message: %w", err)
-		}
-	}
-
-	return embed, m, nil
 }
