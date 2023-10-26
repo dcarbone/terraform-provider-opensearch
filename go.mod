@@ -3,7 +3,7 @@ module github.com/dcarbone/terraform-provider-opensearch
 go 1.19
 
 require (
-	github.com/dcarbone/terraform-plugin-framework-utils/v3 v3.1.0
+	github.com/dcarbone/terraform-plugin-framework-utils/v3 v3.4.1
 	github.com/hashicorp/go-cleanhttp v0.5.2
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/hashicorp/terraform-plugin-docs v0.16.0
@@ -36,7 +36,7 @@ require (
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
 	github.com/hashicorp/go-version v1.6.0 // indirect
 	github.com/hashicorp/hc-install v0.6.0 // indirect
-	github.com/hashicorp/hcl/v2 v2.18.0 // indirect
+	github.com/hashicorp/hcl/v2 v2.18.1 // indirect
 	github.com/hashicorp/logutils v1.0.0 // indirect
 	github.com/hashicorp/terraform-exec v0.19.0 // indirect
 	github.com/hashicorp/terraform-json v0.17.1 // indirect
